@@ -25,9 +25,12 @@ tries to hide a placeholder behind a big claim.
 - Start a Blender bridge and receive MCP tool calls.
 - Build procedural game scenes, interiors, architecture blockouts, products and
   stylized props.
+- Build a playable game-environment blockout from a reference image by sampling
+  its palette and inferring a broad theme.
 - Create a rigged starter humanoid character with named parts and simple
   animation clips.
-- Import local generated models and normalize them in Blender.
+- Import local generated models, auto-upright them, normalize their scale, and
+  frame a clean preview camera.
 - Render preview images.
 - Export `.blend`, `.glb`, `.fbx` and `.obj` files under a workspace folder.
 - Run a local image-to-3D command, wait for it to finish, import the returned
@@ -49,6 +52,14 @@ For the local image-to-3D path, this repo ships two helper scripts:
 TripoSR is a good first local backend because it is open source and has a simple
 command-line runner. On a Mac it will usually run on CPU unless you customize the
 PyTorch setup, so expect it to be much slower than a hosted GPU service.
+
+Important: TripoSR is not a magic "concept art to production character" button.
+It can produce useful rough meshes from clean single-object images, but anime
+sprites, multi-pose sheets, weapons, loose coats, hair spikes, and black
+backgrounds are hard cases. For production-level characters, use this MCP as the
+orchestrator and plug in a stronger backend such as TRELLIS, Hunyuan3D,
+InstantMesh, Rodin, or another service with multi-view generation, texture
+baking, retopo and rigging.
 
 ## Repository Layout
 
@@ -199,14 +210,35 @@ The tool will:
 1. Ask the configured local command to generate a GLB.
 2. Wait for the command to finish.
 3. Import the GLB into Blender.
-4. Normalize the imported model scale.
-5. Save a `.blend`.
-6. Render a preview image.
-7. Return paths to the `.blend`, `.glb` and preview.
+4. Auto-upright the imported mesh when the longest axis is horizontal.
+5. Normalize the imported model scale.
+6. Save a `.blend`.
+7. Frame a dedicated preview camera around the actual mesh bounds.
+8. Render a preview image.
+9. Return paths to the `.blend`, `.glb` and preview.
 
 If the local command is missing or fails, the response includes
 `fallback_reason`. The tool then creates a procedural reference character so
 there is still something to inspect in Blender.
+
+### Create A Game Environment From An Image
+
+Use:
+
+```text
+create_game_environment_from_reference_image(
+  reference_image="/Users/you/Desktop/environment.png",
+  style="mobile_stylized",
+  size="medium",
+  isometric_camera=true
+)
+```
+
+The tool reads the reference palette, infers a broad theme such as `nature`,
+`urban`, `waterfront`, `sci_fi`, `desert`, or `stylized`, then creates a
+playable procedural blockout with lighting, materials, camera, and an optional
+in-scene reference billboard. This is meant for game-ready starting layouts and
+art direction, not photogrammetry.
 
 ## Notes About Quality
 

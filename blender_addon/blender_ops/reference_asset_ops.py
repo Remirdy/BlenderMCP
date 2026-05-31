@@ -8,7 +8,7 @@ import bpy
 
 from ..reference_generators import sprite_reference_character
 from .export_ops import workspace_output
-from .image_to_3d_ai import ImageTo3DError, create_ai_image_to_3d
+from .image_to_3d_ai import ImageTo3DError, create_ai_image_to_3d, frame_imported_asset_camera
 
 
 def _add_reference_image_plane(path: str) -> str | None:
@@ -60,6 +60,7 @@ def op_create_3d_asset_from_reference_image(params):
             provider_result = create_ai_image_to_3d(reference_image, glb_path, params)
             reference_plane = _add_reference_image_plane(reference_image)
             sprite_reference_character.setup_scene()
+            provider_result["camera_frame"] = frame_imported_asset_camera(preview_path)
         except ImageTo3DError as exc:
             fallback_reason = str(exc)
             sprite_reference_character.clear()

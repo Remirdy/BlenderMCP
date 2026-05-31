@@ -20,6 +20,7 @@ failure: `{ "ok": false, "error": str, "hint": str }`.
 ## Scene creation
 - **create_scene_from_prompt(prompt, render_preset="portfolio_render", auto_fix=true, render_after=false)** — full pipeline.
 - **create_game_environment(style, theme, size, isometric_camera)**.
+- **create_game_environment_from_reference_image(reference_image, style, theme, size, isometric_camera, add_reference_billboard, seed)** — samples a reference image, infers a broad game-environment theme and builds a procedural playable blockout with lighting and camera.
 - **create_architectural_exterior(preset, floors, landscaping)**.
 - **create_interior_design_scene(room, style, warm_lighting)**.
 - **create_product_render_scene(product, background)**.

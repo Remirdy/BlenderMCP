@@ -57,6 +57,36 @@ def register(mcp: FastMCP) -> None:
         )
 
     @mcp.tool()
+    def create_game_environment_from_reference_image(
+        reference_image: str,
+        style: str = "mobile_stylized",
+        theme: str = "",
+        size: str = "medium",
+        isometric_camera: bool = True,
+        add_reference_billboard: bool = True,
+        seed: int = 11,
+    ) -> dict:
+        """Create a game-environment blockout from a reference image.
+
+        The bridge samples the image palette, infers a broad theme
+        (nature/urban/waterfront/sci-fi/desert/stylized), builds a playable
+        procedural scene, adds lighting/camera, and can include the reference
+        image as an in-scene billboard for art direction.
+        """
+        return call(
+            "create_game_environment_from_reference_image",
+            {
+                "reference_image": reference_image,
+                "style": style,
+                "theme": theme,
+                "size": size,
+                "isometric_camera": isometric_camera,
+                "add_reference_billboard": add_reference_billboard,
+                "seed": seed,
+            },
+        )
+
+    @mcp.tool()
     def create_architectural_exterior(
         preset: str = "modern_villa", floors: int = 2, landscaping: bool = True
     ) -> dict:

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import math
 import random
+from pathlib import Path
 
 import bpy
 
@@ -153,6 +154,166 @@ def op_create_game_environment(params):
     if style == "low_poly":
         return op_create_low_poly_environment({"theme": theme, "extent": 7})
     return op_create_mobile_game_scene({"theme": theme, "isometric_camera": params.get("isometric_camera", True)})
+
+
+def _analyze_reference_palette(image_path: str) -> dict:
+    path = Path(image_path).expanduser()
+    if not path.exists():
+        raise ValueError(f"Reference image not found: {path}")
+    img = bpy.data.images.load(str(path), check_existing=True)
+    width, height = img.size
+    pixels = img.pixels[:]
+    step = max(1, int(min(width, height) / 96))
+    buckets = {"green": 0, "blue": 0, "gray": 0, "brown": 0, "dark": 0, "bright": 0, "warm": 0, "neon": 0}
+    colors = []
+    for y in range(0, height, step):
+        for x in range(0, width, step):
+            i = (y * width + x) * 4
+            r, g, b, a = pixels[i], pixels[i + 1], pixels[i + 2], pixels[i + 3]
+            if a < 0.15:
+                continue
+            brightness = (r + g + b) / 3
+            colors.append((r, g, b))
+            if g > r * 1.15 and g > b * 1.1:
+                buckets["green"] += 1
+            if b > r * 1.15 and b > g * 1.05:
+                buckets["blue"] += 1
+            if abs(r - g) < 0.08 and abs(g - b) < 0.08:
+                buckets["gray"] += 1
+            if r > g > b and r > 0.24:
+                buckets["brown"] += 1
+            if brightness < 0.18:
+                buckets["dark"] += 1
+            if brightness > 0.70:
+                buckets["bright"] += 1
+            if r > b * 1.25 and r > 0.35:
+                buckets["warm"] += 1
+            if (b > 0.65 and g > 0.45) or (r > 0.75 and b > 0.55):
+                buckets["neon"] += 1
+    total = max(1, sum(buckets.values()))
+    avg = tuple(sum(c[i] for c in colors) / max(1, len(colors)) for i in range(3))
+    if buckets["blue"] > buckets["green"] * 1.2 and buckets["blue"] > buckets["gray"]:
+        inferred = "waterfront"
+    elif buckets["green"] > buckets["gray"] and buckets["green"] > buckets["brown"]:
+        inferred = "nature"
+    elif buckets["neon"] > total * 0.08 and buckets["dark"] > total * 0.20:
+        inferred = "sci_fi"
+    elif buckets["gray"] > buckets["green"] and buckets["gray"] > buckets["blue"]:
+        inferred = "urban"
+    elif buckets["brown"] > buckets["green"]:
+        inferred = "desert"
+    else:
+        inferred = "stylized"
+    return {
+        "width": width,
+        "height": height,
+        "buckets": buckets,
+        "average_color": [round(v, 3) for v in avg],
+        "inferred_theme": inferred,
+    }
+
+
+def _add_reference_billboard(image_path: str, name: str = "Reference_Image_Billboard") -> str | None:
+    try:
+        img = bpy.data.images.load(str(Path(image_path).expanduser()), check_existing=True)
+        mat = H.make_material("M_Reference_Image_Billboard", color=(1, 1, 1, 1), roughness=0.8)
+        mat.use_nodes = True
+        bsdf = mat.node_tree.nodes.get("Principled BSDF") or next((n for n in mat.node_tree.nodes if n.type == "BSDF_PRINCIPLED"), None)
+        tex = mat.node_tree.nodes.new(type="ShaderNodeTexImage")
+        tex.image = img
+        if bsdf:
+            mat.node_tree.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
+        bpy.ops.mesh.primitive_plane_add(location=(-8, 8, 3), rotation=(math.radians(70), 0, math.radians(-35)))
+        plane = bpy.context.object
+        plane.name = name
+        plane.dimensions = (5.5, 3.1, 1)
+        bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+        plane.data.materials.append(mat)
+        return plane.name
+    except Exception:
+        return None
+
+
+def op_create_game_environment_from_reference_image(params):
+    image_path = params.get("reference_image") or params.get("image_path")
+    if not image_path:
+        raise ValueError("reference_image is required")
+    analysis = _analyze_reference_palette(image_path)
+    theme = params.get("theme") or analysis["inferred_theme"]
+    style = params.get("style", "mobile_stylized")
+    size = params.get("size", "medium")
+    extent = {"small": 5, "medium": 7, "large": 10}.get(size, 7)
+    random.seed(int(params.get("seed", 11)))
+    mats = _stylized_mats()
+    env = H.get_or_create_collection("Environment")
+    arch = H.get_or_create_collection("Architecture")
+    props = H.get_or_create_collection("Props")
+    created = []
+    avg = analysis["average_color"]
+    accent = H.make_material("Ref_Accent_Color", color=(avg[0], avg[1], avg[2], 1), roughness=0.55)
+
+    if theme == "waterfront":
+        ground_mat = H.make_material("Ref_Sand_Ground", color=(0.72, 0.63, 0.44, 1), roughness=0.8)
+        water_mat = H.make_material("Ref_Water", color=(0.05, 0.36, 0.62, 0.78), roughness=0.25)
+        H.create_floor("Ground_Sand", width=extent * 4, depth=extent * 4, mat=ground_mat, collection=env)
+        water = H.create_floor("Water_Plane", width=extent * 4, depth=extent * 1.5, location=(0, extent * 1.2, 0.025), mat=water_mat, collection=env)
+        created += ["Ground_Sand", water.name]
+        for i in range(extent):
+            H.create_tree(f"Palm_{i:02d}", location=(random.uniform(-extent, extent), random.uniform(-extent, extent * 0.7), 0),
+                          scale=random.uniform(0.8, 1.4), collection=env,
+                          trunk_mat=mats["Stylized_Trunk"], leaf_mat=mats["Stylized_Foliage"])
+    elif theme == "sci_fi":
+        result = op_create_sci_fi_corridor({"theme": "reference_sci_fi"})
+        if params.get("add_reference_billboard", True):
+            billboard = _add_reference_billboard(image_path)
+            if billboard:
+                result.setdefault("created", []).append(billboard)
+        result.update({
+            "theme": theme,
+            "style": style,
+            "analysis": analysis,
+            "note": "Reference image is used for palette/theme/layout hints; this is a procedural playable blockout, not photogrammetry.",
+        })
+        return result
+    else:
+        ground_mat = mats["Stylized_Grass"] if theme == "nature" else mats["Cartoon_Concrete"]
+        H.create_floor("Ground_Reference_Blockout", width=extent * 4, depth=extent * 4, mat=ground_mat, collection=env)
+        created.append("Ground_Reference_Blockout")
+        if theme in {"urban", "stylized"}:
+            for i in range(6):
+                x, y = random.uniform(-extent, extent), random.uniform(-extent, extent)
+                h = random.uniform(1.5, 5.0)
+                mat = accent if i % 3 == 0 else mats["Cartoon_Concrete"]
+                b = H.add_box(f"Ref_Building_{i:02d}", size=(random.uniform(1.2, 2.8), random.uniform(1.2, 2.8), h),
+                              location=(x, y, 0), mat=mat, collection=arch)
+                created.append(b.name)
+        for i in range(extent * 2):
+            if theme == "urban" and i % 2 == 0:
+                H.create_game_prop(f"Ref_Crate_{i:02d}", kind="crate",
+                                   location=(random.uniform(-extent, extent), random.uniform(-extent, extent), 0),
+                                   collection=props, mat=mats["Cartoon_Wood"])
+            else:
+                H.create_tree(f"Ref_Tree_{i:02d}", location=(random.uniform(-extent * 1.4, extent * 1.4), random.uniform(-extent * 1.4, extent * 1.4), 0),
+                              scale=random.uniform(0.6, 1.3), collection=env,
+                              trunk_mat=mats["Stylized_Trunk"], leaf_mat=mats["Stylized_Foliage"])
+
+    if params.get("add_reference_billboard", True):
+        billboard = _add_reference_billboard(image_path)
+        if billboard:
+            created.append(billboard)
+    if params.get("isometric_camera", True):
+        R.op_setup_isometric_camera({})
+    else:
+        R.op_setup_camera({})
+    R.op_setup_lighting({"style": "bright"})
+    R.op_apply_render_preset({"preset": "portfolio_render"})
+    return {
+        "created": created,
+        "theme": theme,
+        "style": style,
+        "analysis": analysis,
+        "note": "Reference image is used for palette/theme/layout hints; this is a procedural playable blockout, not photogrammetry.",
+    }
 
 
 def op_create_sci_fi_corridor(params):

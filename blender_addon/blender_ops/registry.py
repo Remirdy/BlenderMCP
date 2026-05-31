@@ -102,12 +102,14 @@ REGISTRY = {
     # scene creation
     "create_scene_from_prompt": op_create_scene_from_prompt,
     "create_game_environment": G.op_create_game_environment,
+    "create_game_environment_from_reference_image": G.op_create_game_environment_from_reference_image,
     "create_architectural_exterior": A.op_create_architectural_exterior,
     "create_interior_design_scene": I.op_create_interior_design_scene,
     "create_product_render_scene": S.op_create_product_render_scene,
     "create_cinematic_scene": S.op_create_cinematic_scene,
     # game tools
     "create_game_ready_prop": G.op_create_game_ready_prop,
+    "create_game_environment_from_image": G.op_create_game_environment_from_reference_image,
     "create_modular_environment_piece": G.op_create_modular_environment_piece,
     "create_low_poly_environment": G.op_create_low_poly_environment,
     "create_stylized_building": G.op_create_stylized_building,
