@@ -18,6 +18,7 @@ DEVICE="${TRIPOSR_DEVICE:-cpu}"
 MC_RESOLUTION="${TRIPOSR_MC_RESOLUTION:-256}"
 TEXTURE_RESOLUTION="${TRIPOSR_TEXTURE_RESOLUTION:-2048}"
 FOREGROUND_RATIO="${TRIPOSR_FOREGROUND_RATIO:-0.85}"
+BAKE_TEXTURE="${TRIPOSR_BAKE_TEXTURE:-0}"
 
 if [ ! -f "${IMAGE_PATH}" ]; then
   echo "Input image not found: ${IMAGE_PATH}" >&2
@@ -43,14 +44,20 @@ rm -rf "${WORK_DIR}/0"
 
 cd "${TRIPOSR_DIR}"
 
-"${TRIPOSR_PYTHON}" run.py "${IMAGE_PATH}" \
+ARGS=(
+  run.py "${IMAGE_PATH}"
   --device "${DEVICE}" \
   --output-dir "${WORK_DIR}" \
   --model-save-format glb \
-  --bake-texture \
-  --texture-resolution "${TEXTURE_RESOLUTION}" \
   --mc-resolution "${MC_RESOLUTION}" \
   --foreground-ratio "${FOREGROUND_RATIO}"
+)
+
+if [ "${BAKE_TEXTURE}" = "1" ]; then
+  ARGS+=(--bake-texture --texture-resolution "${TEXTURE_RESOLUTION}")
+fi
+
+"${TRIPOSR_PYTHON}" "${ARGS[@]}"
 
 GENERATED_GLB="${WORK_DIR}/0/mesh.glb"
 if [ ! -f "${GENERATED_GLB}" ]; then

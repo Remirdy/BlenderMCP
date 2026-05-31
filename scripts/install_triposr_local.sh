@@ -15,18 +15,53 @@ fi
 
 cd "${TRIPOSR_DIR}"
 
-python3 -m venv .venv
+PYTHON_BIN="${TRIPOSR_SETUP_PYTHON:-}"
+if [ -z "${PYTHON_BIN}" ]; then
+  if command -v python3.11 >/dev/null 2>&1; then
+    PYTHON_BIN="$(command -v python3.11)"
+  else
+    PYTHON_BIN="$(command -v python3)"
+  fi
+fi
+
+"${PYTHON_BIN}" -m venv .venv
 source .venv/bin/activate
 
-python -m pip install --upgrade pip setuptools wheel
+python -m pip install --upgrade "pip<26" "setuptools<82" wheel
 python -m pip install torch torchvision torchaudio
-python -m pip install -r requirements.txt
-python -m pip install git+https://github.com/tatsy/torchmcubes.git
+python -m pip install \
+  "numpy<2" \
+  "Pillow==10.1.0" \
+  "omegaconf==2.3.0" \
+  "einops==0.7.0" \
+  "transformers==4.35.0" \
+  "trimesh==4.0.5" \
+  "huggingface-hub==0.17.3" \
+  "imageio[ffmpeg]" \
+  "rembg" \
+  "onnxruntime" \
+  "moderngl==5.10.0" \
+  "git+https://github.com/tatsy/torchmcubes.git"
+
+if [ ! -f "${TRIPOSR_DIR}/xatlas.py" ]; then
+  cat > "${TRIPOSR_DIR}/xatlas.py" <<'PY'
+"""Local shim for TripoSR runs without texture baking."""
+
+def export(*_args, **_kwargs):
+    raise RuntimeError(
+        "xatlas is not installed. Run without --bake-texture, or install xatlas "
+        "before enabling texture baking."
+    )
+PY
+fi
 
 cat <<EOF
 
 TripoSR is installed at:
   ${TRIPOSR_DIR}
+
+Python used:
+  ${PYTHON_BIN}
 
 Use it from Remirdy with:
   export TRIPOSR_DIR="${TRIPOSR_DIR}"
