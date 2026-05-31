@@ -19,6 +19,7 @@ MC_RESOLUTION="${TRIPOSR_MC_RESOLUTION:-256}"
 TEXTURE_RESOLUTION="${TRIPOSR_TEXTURE_RESOLUTION:-2048}"
 FOREGROUND_RATIO="${TRIPOSR_FOREGROUND_RATIO:-0.85}"
 BAKE_TEXTURE="${TRIPOSR_BAKE_TEXTURE:-0}"
+NO_REMOVE_BG="${TRIPOSR_NO_REMOVE_BG:-0}"
 
 if [ ! -f "${IMAGE_PATH}" ]; then
   echo "Input image not found: ${IMAGE_PATH}" >&2
@@ -41,6 +42,7 @@ OUT_DIR="$(dirname "${OUTPUT_GLB}")"
 WORK_DIR="${OUT_DIR}/.$(basename "${OUTPUT_GLB}" .glb)_triposr"
 mkdir -p "${WORK_DIR}" "${OUT_DIR}"
 rm -rf "${WORK_DIR}/0"
+mkdir -p "${WORK_DIR}/0"
 
 cd "${TRIPOSR_DIR}"
 
@@ -52,6 +54,10 @@ ARGS=(
   --mc-resolution "${MC_RESOLUTION}" \
   --foreground-ratio "${FOREGROUND_RATIO}"
 )
+
+if [ "${NO_REMOVE_BG}" = "1" ]; then
+  ARGS+=(--no-remove-bg)
+fi
 
 if [ "${BAKE_TEXTURE}" = "1" ]; then
   ARGS+=(--bake-texture --texture-resolution "${TEXTURE_RESOLUTION}")
