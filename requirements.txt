@@ -1,0 +1,2 @@
+# Server-side runtime dependency (install with pip)
+mcp>=1.2.0

@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.DS_Store
+.venv/
+venv/
+ai_models/
+workspace/
+outputs/
+RemirdyWorkspace/
+*.blend1
+dist/
+build/
+*.egg-info/
+remirdy_blender_studio.zip

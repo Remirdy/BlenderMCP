@@ -1,0 +1,24 @@
+[project]
+name = "remirdy-blender-studio-mcp"
+version = "0.1.0"
+description = "A local MCP bridge for controlling Blender, generating scenes, and importing local image-to-3D results."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Remirdy" }]
+license = { text = "MIT" }
+dependencies = [
+    "mcp>=1.2.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+
+[project.scripts]
+remirdy-mcp = "server.main:run"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["server", "server.tools", "server.schemas", "server.utils"]
