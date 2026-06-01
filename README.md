@@ -95,6 +95,8 @@ In Blender: **Edit → Preferences → Add-ons → Install** → select `dist/re
 
 ### 3 — Connect your MCP client
 
+Default desktop MCP clients should use the stdio transport:
+
 Add to your MCP client config (e.g. `claude_desktop_config.json`):
 
 ```json
@@ -110,6 +112,39 @@ Add to your MCP client config (e.g. `claude_desktop_config.json`):
     }
   }
 }
+```
+
+For local HTTP testing:
+
+```bash
+remirdy-mcp --transport http
+```
+
+This starts the streamable HTTP endpoint at:
+
+```
+http://127.0.0.1:8000/mcp
+```
+
+For ChatGPT developer mode, expose the MCP endpoint through HTTPS:
+
+```bash
+remirdy-mcp --transport https
+```
+
+The command auto-detects `ngrok` or `cloudflared`, starts a tunnel, and prints a
+ChatGPT-ready URL like:
+
+```
+https://example.ngrok-free.app/mcp
+```
+
+Paste that URL into **ChatGPT → Settings → Apps → Create app → MCP server
+endpoint**, then scan tools. If you already have your own HTTPS reverse proxy,
+skip tunnel startup:
+
+```bash
+remirdy-mcp --transport https --tunnel none --public-url https://your-domain.example
 ```
 
 ### 4 — Try a prompt

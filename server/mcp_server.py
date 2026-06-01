@@ -69,8 +69,19 @@ Raw Python execution is NOT exposed by default.
 """.strip()
 
 
-def build_server() -> FastMCP:
-    mcp = FastMCP("Remirdy Blender Studio", instructions=INSTRUCTIONS)
+def build_server(
+    *,
+    host: str = "127.0.0.1",
+    port: int = 8000,
+    mcp_path: str = "/mcp",
+) -> FastMCP:
+    mcp = FastMCP(
+        "Remirdy Blender Studio",
+        instructions=INSTRUCTIONS,
+        host=host,
+        port=port,
+        streamable_http_path=mcp_path,
+    )
     for module in (
         connection_tools,
         scene_tools,
