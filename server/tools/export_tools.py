@@ -43,3 +43,16 @@ def register(mcp: FastMCP) -> None:
     def export_turntable_animation(filename: str = "turntable.mp4", frames: int = 48) -> dict:
         """Render a 360° turntable animation of the scene subject to outputs/renders."""
         return call("export_turntable_animation", {"filename": filename, "frames": frames})
+
+    @mcp.tool()
+    def generate_html_catalog() -> dict:
+        """Automatically scans the workspace outputs and generates a premium responsive HTML catalog gallery."""
+        return call("generate_html_catalog")
+
+    @mcp.tool()
+    def sync_engine_live_link(target: str = "unity", port: int = 8766) -> dict:
+        """Enable a continuous live-link sync between Blender's viewport data and the active game engine editor.
+
+        target: unity | unreal | godot
+        """
+        return call("sync_engine_live_link", {"target": target, "port": port})

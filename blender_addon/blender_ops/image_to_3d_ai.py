@@ -97,6 +97,7 @@ def _bounds(imported: list[bpy.types.Object]) -> tuple[Vector, Vector] | None:
 
 def _apply_root_rotation(imported: list[bpy.types.Object], rotation: tuple[float, float, float]) -> None:
     for obj in _root_imported_objects(imported):
+        obj.rotation_mode = 'XYZ'
         obj.rotation_euler.rotate_axis("X", rotation[0])
         obj.rotation_euler.rotate_axis("Y", rotation[1])
         obj.rotation_euler.rotate_axis("Z", rotation[2])
@@ -127,9 +128,12 @@ def _auto_upright(imported: list[bpy.types.Object]) -> dict[str, Any]:
     }
 
 
-def _fit_imported_scene(params: dict[str, Any] | None = None) -> dict[str, Any]:
+def _fit_imported_scene(imported_names: list[str] | None = None, params: dict[str, Any] | None = None) -> dict[str, Any]:
     params = dict(params or {})
-    imported = _imported_scene_objects()
+    if imported_names is not None:
+        imported = [bpy.data.objects.get(name) for name in imported_names if bpy.data.objects.get(name)]
+    else:
+        imported = _imported_scene_objects()
     if not imported:
         return {"object_count": 0, "fit": False}
     bpy.ops.object.select_all(action="DESELECT")
@@ -242,7 +246,7 @@ def create_with_meshy(reference_image: str, glb_path: str, params: dict[str, Any
                 raise ImageTo3DError(f"Meshy task succeeded without a GLB URL: {status}")
             _download(model_url, glb_path)
             imported_names = _import_glb(glb_path)
-            fit_info = _fit_imported_scene(params)
+            fit_info = _fit_imported_scene(imported_names, params)
             return {
                 "provider": "meshy",
                 "task_id": task_id,
@@ -311,7 +315,7 @@ def create_with_local_command(reference_image: str, glb_path: str, params: dict[
             f"{output}. stdout: {proc.stdout[-2000:]} stderr: {proc.stderr[-2000:]}"
         )
     imported_names = _import_glb(output)
-    fit_info = _fit_imported_scene(params)
+    fit_info = _fit_imported_scene(imported_names, params)
     return {
         "provider": "local_command",
         "command": command,
@@ -330,7 +334,7 @@ def create_ai_image_to_3d(reference_image: str, glb_path: str, params: dict[str,
         return create_with_local_command(reference_image, glb_path, params)
     if provider == "meshy":
         return create_with_meshy(reference_image, glb_path, params)
-    if provider == "auto":
+    if provider in {"auto", "parallel"}:
         errors = []
         for candidate in ("local", "meshy"):
             try:

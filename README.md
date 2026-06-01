@@ -1,122 +1,101 @@
-# Remirdy Blender MCP
+# Remirdy Blender Studio MCP
 
-Remirdy Blender MCP is a local bridge between an MCP client and Blender. It lets
-the client ask Blender for structured work: create scenes, build simple assets,
-inspect the current file, render previews, export GLB/FBX/OBJ files, and run a
-local image-to-3D pipeline when one is installed.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
+[![Blender](https://img.shields.io/badge/blender-3.6%2B-orange.svg)](https://www.blender.org/)
+[![Version](https://img.shields.io/badge/version-0.2.0-green.svg)](pyproject.toml)
 
-This repository intentionally keeps Blender control and model generation
-separate:
+A local [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) bridge that lets any MCP-capable AI client control Blender directly — building 3D scenes, generating assets, importing AI-generated models, and rendering previews, all through natural-language prompts.
 
-- The MCP server speaks to Blender through a small socket bridge.
-- Blender only runs named operations that are registered in the add-on.
-- Local image-to-3D is an optional dependency. The model weights are not stored
-  in this repo.
-- If no local image-to-3D runner is configured, the reference-image tool falls
-  back to a procedural character generator and reports why the local runner was
-  skipped.
+---
 
-The goal is a workflow that is honest and easy to debug. If a model is missing,
-the tool says so. If a render fails, the file paths and logs stay local. Nothing
-tries to hide a placeholder behind a big claim.
+## Architecture
 
-## What This Can Do
+```mermaid
+graph LR
+    Client["MCP Client\n(Claude Desktop / Cursor / etc.)"]
+    Server["MCP Server\n(remirdy-mcp)"]
+    Bridge["Blender Bridge\n(TCP 127.0.0.1:8765)"]
+    Blender["Blender\n(bpy ops)"]
+    Providers["Cloud Providers\n(Meshy / Tripo / Rodin / Hunyuan3D)"]
+    Vision["Gemini Vision\n(AI scene analysis)"]
 
-- Start a Blender bridge and receive MCP tool calls.
-- Build procedural game scenes, interiors, architecture blockouts, products and
-  stylized props.
-- Build a playable game-environment blockout from a reference image by sampling
-  its palette and inferring a broad theme.
-- Create a rigged starter humanoid character with named parts and simple
-  animation clips.
-- Import local generated models, auto-upright them, normalize their scale, and
-  frame a clean preview camera.
-- Render preview images.
-- Export `.blend`, `.glb`, `.fbx` and `.obj` files under a workspace folder.
-- Run a local image-to-3D command, wait for it to finish, import the returned
-  GLB into Blender, save the `.blend`, and render a preview.
-
-## What This Does Not Bundle
-
-This repo does not include TripoSR, InstantMesh, TRELLIS, Hunyuan3D, Rodin, or
-any other model weights. Those projects are large, change independently, and may
-have their own licenses and hardware requirements.
-
-For the local image-to-3D path, this repo ships two helper scripts:
-
-- `scripts/install_triposr_local.sh`: clones and installs TripoSR beside the
-  repo.
-- `scripts/run_triposr_to_glb.sh`: runs TripoSR for one image and copies the
-  generated `mesh.glb` to the output path expected by the MCP tool.
-
-TripoSR is a good first local backend because it is open source and has a simple
-command-line runner. On a Mac it will usually run on CPU unless you customize the
-PyTorch setup, so expect it to be much slower than a hosted GPU service.
-
-Important: TripoSR is not a magic "concept art to production character" button.
-It can produce useful rough meshes from clean single-object images, but anime
-sprites, multi-pose sheets, weapons, loose coats, hair spikes, and black
-backgrounds are hard cases. For production-level characters, use this MCP as the
-orchestrator and plug in a stronger backend such as TRELLIS, Hunyuan3D,
-InstantMesh, Rodin, or another service with multi-view generation, texture
-baking, retopo and rigging.
-
-## Repository Layout
-
-```text
-blender_addon/                Blender add-on and in-Blender operation registry
-blender_addon/blender_ops/    Scene, asset, render, export and image-to-3D ops
-server/                       MCP server and tool definitions
-scripts/                      Packaging, local TripoSR install and wrapper scripts
-docs/                         Setup notes, safety notes and tool reference
-examples/                     Prompt examples for common workflows
+    Client -->|"MCP stdio"| Server
+    Server -->|"JSON over TCP"| Bridge
+    Bridge --> Blender
+    Server --> Providers
+    Server --> Vision
 ```
 
-Generated files are written under `REMIRDY_WORKSPACE`, which defaults to
-`~/RemirdyWorkspace`.
+The MCP server never executes arbitrary Python in Blender. It only sends **named operation strings** that Blender dispatches through `blender_addon/blender_ops/registry.py` — keeping arbitrary code execution out of the default surface area.
 
-## Requirements
+---
 
-- Python 3.10 or newer for the MCP server.
-- Blender 3.6 or newer. The current local test was done with Blender 5.1.2.
-- An MCP-capable client such as Claude Desktop, Cursor, ChatGPT/Codex, or any
-  client that can start a stdio MCP server.
-- Optional: TripoSR for local image-to-3D.
+## Features
 
-## Install The MCP Server
+### 🧠 AI Vision Scene Analysis (v0.2.0 — NEW)
+
+Point the system at a **PSD, PSB, PNG, or JPEG** concept art file and it will use **Google Gemini 2.5-flash** to:
+
+- Identify every object in the image with its type, position, material, and scale
+- Generate a structured 3D scene plan (lighting, camera angle, mood, colour palette)
+- Analyse individual PSD layers to determine what 3D role each should play
+- Fall back silently to colour-sampling analysis when no API key is set
+
+### 🎮 Scene Generation
+
+| Tool category | Count | Examples |
+|---|---|---|
+| Scene & Prompt | 8 | `create_scene_from_prompt`, `create_cinematic_scene` |
+| Game Environment | 14 | `create_game_environment`, `create_game_level_blockout` |
+| Interior Design | 7 | `create_interior_design_scene`, `add_furniture_set` |
+| Architecture | 4 | `create_architectural_exterior`, `create_facade` |
+| Modular / Kitbash | 11 | `create_modular_set`, `assemble_from_modules` |
+| Product Render | 7 | `create_product_render_scene`, `apply_product_material` |
+
+### 🖼️ Image → 3D Model
+
+| Provider | API Key | Speed | Notes |
+|---|---|---|---|
+| **Meshy** | `MESHY_API_KEY` | ~60 s | PBR textures, quad mesh |
+| **Tripo** | `TRIPO_API_KEY` | ~45 s | Excellent topology |
+| **Rodin** (Hyper3D) | `RODIN_API_KEY` | ~90 s | High detail |
+| **Hunyuan3D** (Tencent) | `HUNYUAN3D_API_KEY` | ~120 s | Open-weight cloud |
+| **Local** (TripoSR / custom) | `REMIRDY_LOCAL_IMAGE_TO_3D_COMMAND` | varies | Runs fully offline |
+| **Parallel** | — | fastest wins | Cloud + local race |
+
+### ✨ Assets, Materials & Quality
+
+Characters (11 tools) · Materials (11) · Assets (11) · Quality checks (17) · Rendering (12) · Export (8)
+
+---
+
+## Quick start
+
+### 1 — Install the MCP server
 
 ```bash
-cd /path/to/remirdy-blender-studio-mcp
-python3 -m venv .venv
-source .venv/bin/activate
-pip install --upgrade pip
-pip install -r requirements.txt
+git clone https://github.com/remirdy/remirdy-blender-studio-mcp.git
+cd remirdy-blender-studio-mcp
+
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e .
+
+# Optional: set your API keys
+cp .env.example .env && nano .env
 ```
 
-## Install The Blender Add-On
-
-Package the add-on:
+### 2 — Install the Blender add-on
 
 ```bash
 python scripts/package_addon.py
 ```
 
-Then in Blender:
+In Blender: **Edit → Preferences → Add-ons → Install** → select `dist/remirdy_blender_studio.zip` → enable **Remirdy Blender Studio MCP** → press **N** in the 3D viewport → **Remirdy MCP** tab → **Start Bridge**.
 
-1. Open `Edit -> Preferences -> Add-ons`.
-2. Click `Install...`.
-3. Select `dist/remirdy_blender_studio.zip`.
-4. Enable `Remirdy Blender Studio MCP`.
-5. In the 3D viewport, press `N`.
-6. Open the `Remirdy MCP` sidebar tab.
-7. Set the workspace folder if you want a custom location.
-8. Click `Start Bridge`.
+### 3 — Connect your MCP client
 
-The default bridge is local only: `127.0.0.1:8765`.
-
-## Connect An MCP Client
-
-Example MCP config:
+Add to your MCP client config (e.g. `claude_desktop_config.json`):
 
 ```json
 {
@@ -133,216 +112,147 @@ Example MCP config:
 }
 ```
 
-After the client starts the server, call:
+### 4 — Try a prompt
 
-```text
+```
 connect_blender
 ```
 
-If Blender is open and the bridge is running, the tool should return a small
-`pong` response.
-
-## Local Image-To-3D Setup
-
-The image-to-3D tool needs a local command that follows this contract:
-
-```text
-command /path/to/input-image.png /path/to/output.glb
+```
+Create a small Mediterranean terrace scene — warm golden-hour lighting,
+terracotta tiles, some potted plants, and a wrought-iron table. Export as GLB.
 ```
 
-The command must write a valid GLB to the second path and exit with code `0`.
+---
 
-### Option A: Use The TripoSR Helper
+## AI Vision setup (optional but recommended)
 
-From the repo root:
+Get a free API key at [Google AI Studio](https://aistudio.google.com/) and add it to your `.env`:
+
+```
+GEMINI_API_KEY=your_key_here
+```
+
+Then try:
+
+```
+Build a 3D scene from ~/Desktop/concept_art.psd using AI vision analysis.
+Use the detected object positions and materials for accurate placement.
+```
+
+Without an API key the system falls back to colour-based analysis — it still works, just less accurately for complex scenes.
+
+---
+
+## Supported formats
+
+| Input | Output |
+|---|---|
+| PSD, PSB (Photoshop) | `.blend` |
+| PNG, JPEG, WEBP | `.glb` (glTF binary) |
+| GLB (import) | `.fbx` |
+| — | `.obj` |
+
+---
+
+## Tool reference (all categories)
+
+| Category | Module | Tools |
+|---|---|---|
+| Connection | `connection_tools` | connect_blender, disconnect_blender, get_connection_status, ping_blender, … |
+| Scene | `scene_tools` | create_scene_from_prompt, get_scene_summary, setup_camera, clear_scene, … |
+| Rendering | `render_tools` | render_preview, apply_render_preset, setup_lighting, set_render_resolution, … |
+| Materials | `material_tools` | apply_material_preset, create_pbr_material, set_object_color, bulk_assign_material, … |
+| Characters | `character_tools` | create_rigged_character, add_animation_clip, set_character_pose, rig_character, … |
+| Assets | `asset_tools` | create_prop, duplicate_object, merge_objects, apply_transform, … |
+| Game | `game_tools` | create_game_environment, create_game_level_blockout, add_collision_mesh, … |
+| Interior | `interior_tools` | create_interior_design_scene, add_furniture_set, add_lighting_plan, … |
+| Architecture | `architecture_tools` | create_architectural_exterior, create_facade, add_windows, add_roof, … |
+| Modular | `modular_tools` | create_modular_set, assemble_from_modules, snap_to_grid, … |
+| Product | `product_tools` | create_product_render_scene, apply_product_material, add_product_lighting, … |
+| Image → 3D | `reference_asset_tools` | create_3d_asset_from_reference_image, build_layered_scene_from_image, … |
+| Asset Source | `asset_source_tools` | search_polyhaven, download_hdri, download_texture, list_asset_packs, … |
+| Import | `import_tools` | import_glb, import_fbx |
+| Export | `export_tools` | export_glb, export_fbx, export_obj, export_blend, … |
+| Quality | `quality_tools` | scene_quality_check, auto_fix_scene, check_mesh_errors, optimize_scene, … |
+| Understanding | `understanding_tools` | analyse_scene, describe_objects, get_material_report, … |
+| Marketplace | `marketplace_tools` | browse_marketplace, download_asset, install_asset, … |
+| Telemetry | `telemetry_tools` | get_telemetry, reset_telemetry, toggle_telemetry |
+
+Full parameter docs: [`docs/tool_reference.md`](docs/tool_reference.md)
+
+---
+
+## Repository layout
+
+```
+blender_addon/              Blender add-on (runs inside Blender)
+  blender_ops/              Operation handlers + registry
+  bridge_server.py          TCP bridge server
+server/                     MCP server (runs on the host)
+  tools/                    MCP tool definitions (one file per category)
+  providers/                Image-to-3D provider adapters
+  utils/                    Shared helpers: psd_utils, ai_vision, validation, …
+tests/                      Server-side pytest suite (no Blender needed)
+examples/prompts/           Copy-paste prompt examples
+docs/                       Extended documentation
+scripts/                    Packaging, TripoSR install helper
+```
+
+---
+
+## Running the tests
 
 ```bash
-./scripts/install_triposr_local.sh
+pip install -e ".[dev]"
+python -m pytest tests/ -v
 ```
 
-This clones TripoSR into a sibling folder:
+---
 
-```text
-../ai_models/TripoSR
-```
+## Environment variables
 
-It also creates a Python virtual environment inside the TripoSR folder and
-installs the dependencies listed by that project.
+See [`.env.example`](.env.example) for the full list with descriptions. Key variables:
 
-Then export these environment variables before starting the MCP server:
+| Variable | Default | Purpose |
+|---|---|---|
+| `REMIRDY_WORKSPACE` | `~/RemirdyWorkspace` | Output directory |
+| `REMIRDY_BRIDGE_TIMEOUT` | `3900` | Bridge socket timeout (seconds) |
+| `GEMINI_API_KEY` | — | Enables AI vision scene analysis |
+| `MESHY_API_KEY` | — | Meshy cloud image-to-3D |
+| `TRIPO_API_KEY` | — | Tripo cloud image-to-3D |
+| `RODIN_API_KEY` | — | Rodin (Hyper3D) cloud image-to-3D |
+| `HUNYUAN3D_API_KEY` | — | Hunyuan3D cloud image-to-3D |
+| `REMIRDY_LOCAL_IMAGE_TO_3D_COMMAND` | — | Local image-to-3D command template |
+| `REMIRDY_LOG_LEVEL` | `INFO` | Logging verbosity |
 
-```bash
-export TRIPOSR_DIR="/absolute/path/to/ai_models/TripoSR"
-export REMIRDY_IMAGE_TO_3D_PROVIDER=local
-export REMIRDY_LOCAL_IMAGE_TO_3D_COMMAND='bash /absolute/path/to/remirdy-blender-studio-mcp/scripts/run_triposr_to_glb.sh "{image}" "{output}"'
-export REMIRDY_IMAGE_TO_3D_WAIT_SECONDS=3600
-export REMIRDY_BRIDGE_TIMEOUT=3900
-export REMIRDY_BRIDGE_REQUEST_TIMEOUT=3900
-```
-
-Then start your MCP client and Blender bridge normally.
-
-### Test TripoSR By Hand
-
-```bash
-cd /absolute/path/to/remirdy-blender-studio-mcp
-bash scripts/run_triposr_to_glb.sh /Users/you/Desktop/reference.png /tmp/reference.glb
-```
-
-If the script works, `/tmp/reference.glb` should exist.
-
-### Use It Through MCP
-
-Call:
-
-```text
-create_3d_asset_from_reference_image(
-  reference_image="/Users/you/Desktop/reference.png",
-  asset_type="human_character",
-  filename="reference_character",
-  provider="local",
-  wait_seconds=3600
-)
-```
-
-The tool will:
-
-1. Ask the configured local command to generate a GLB.
-2. Wait for the command to finish.
-3. Import the GLB into Blender.
-4. Auto-upright the imported mesh when the longest axis is horizontal.
-5. Normalize the imported model scale.
-6. Save a `.blend`.
-7. Frame a dedicated preview camera around the actual mesh bounds.
-8. Render a preview image.
-9. Return paths to the `.blend`, `.glb` and preview.
-
-If the local command is missing or fails, the response includes
-`fallback_reason`. The tool then creates a procedural reference character so
-there is still something to inspect in Blender.
-
-### Create A Game Environment From An Image
-
-Use:
-
-```text
-create_game_environment_from_reference_image(
-  reference_image="/Users/you/Desktop/environment.png",
-  style="mobile_stylized",
-  size="medium",
-  isometric_camera=true
-)
-```
-
-The tool reads the reference palette, infers a broad theme such as `nature`,
-`urban`, `waterfront`, `sci_fi`, `desert`, or `stylized`, then creates a
-playable procedural blockout with lighting, materials, camera, and an optional
-in-scene reference billboard. This is meant for game-ready starting layouts and
-art direction, not photogrammetry.
-
-## Notes About Quality
-
-Single-image reconstruction is still guesswork. A sprite sheet, front view, or
-clean concept image will usually work better than a dark, cropped or heavily
-stylized action pose. For characters, a neutral standing reference is easier for
-the model than a fighting pose with motion effects.
-
-If you want the best result:
-
-- Use a high-resolution PNG.
-- Keep the character fully visible.
-- Avoid black-on-black edges.
-- Prefer a clean background or transparent background.
-- Give the model time; CPU generation can be slow.
-- After generation, use Blender cleanup tools for rigging, retopo and material
-  fixes.
-
-## Common Commands
-
-```text
-connect_blender
-get_scene_summary
-create_scene_from_prompt
-create_3d_asset_from_reference_image
-scene_quality_check
-auto_fix_scene
-render_preview
-export_glb
-```
-
-Example:
-
-```text
-Create a small stylized workshop scene with a wooden desk, tools, shelves,
-warm lighting, a camera, and export it as a Unity-ready GLB.
-```
-
-## Safety Model
-
-The default bridge does not expose arbitrary Python execution. The MCP server
-sends operation names and parameters. Blender dispatches those names through
-`blender_addon/blender_ops/registry.py`.
-
-File output is kept under the configured workspace. Imports are expected to come
-from trusted local paths. If you expose the bridge outside localhost, set a
-bridge token first.
-
-See `docs/safety.md` for more detail.
+---
 
 ## Troubleshooting
 
-| Problem | What to check |
+| Symptom | Fix |
 |---|---|
-| `Could not reach the Blender bridge` | Blender is open, the add-on is enabled, and `Start Bridge` was clicked. |
-| Local image-to-3D falls back | Check `fallback_reason`, `TRIPOSR_DIR`, and `REMIRDY_LOCAL_IMAGE_TO_3D_COMMAND`. |
-| TripoSR is very slow | You are probably running on CPU. Lower `TRIPOSR_MC_RESOLUTION` or use a GPU machine. |
-| No GLB appears | Run `scripts/run_triposr_to_glb.sh` by hand and inspect its terminal output. |
-| Render is empty | Run `setup_camera` or `auto_fix_scene`, then render again. |
-| Export fails | Confirm Blender's glTF/FBX/OBJ import-export add-ons are available. |
+| `Could not reach the Blender bridge` | Blender open? Add-on enabled? **Start Bridge** clicked? |
+| Image-to-3D falls back to procedural | Check `fallback_reason` in response; verify API key or local command |
+| Gemini vision disabled | Set `GEMINI_API_KEY` in `.env`; run `pip install google-genai` |
+| TripoSR very slow | Likely on CPU — lower `TRIPOSR_MC_RESOLUTION` or use a GPU machine |
+| Render is empty | Run `setup_camera` or `auto_fix_scene` first |
+| PSD layers not extracted | Run `pip install psd-tools Pillow` |
 
-## Environment Variables
+---
 
-| Variable | Purpose |
-|---|---|
-| `REMIRDY_WORKSPACE` | Output folder for blends, renders, exports and temp files. |
-| `REMIRDY_IMAGE_TO_3D_PROVIDER` | Use `local` for the local runner. |
-| `REMIRDY_LOCAL_IMAGE_TO_3D_COMMAND` | Command template called by Blender. Supports `{image}`, `{output}`, `{workdir}`. |
-| `REMIRDY_IMAGE_TO_3D_WAIT_SECONDS` | Max time to wait for image-to-3D generation. |
-| `REMIRDY_BRIDGE_TIMEOUT` | MCP server socket timeout. |
-| `REMIRDY_BRIDGE_REQUEST_TIMEOUT` | Blender bridge request timeout. |
-| `TRIPOSR_DIR` | Path to the local TripoSR checkout. |
-| `TRIPOSR_PYTHON` | Optional path to the Python executable used for TripoSR. |
-| `TRIPOSR_DEVICE` | `cpu`, `cuda:0`, or another PyTorch device string. |
-| `TRIPOSR_MC_RESOLUTION` | Marching-cubes resolution. Lower is faster, higher is heavier. |
-| `TRIPOSR_TEXTURE_RESOLUTION` | Texture atlas size for TripoSR's baked texture path. |
+## Safety model
 
-## Development
+The bridge only dispatches **named operations** registered in `registry.py`. No arbitrary Python execution. File output is kept under `REMIRDY_WORKSPACE`. See [`docs/safety.md`](docs/safety.md) for details.
 
-Run a quick syntax check:
+---
 
-```bash
-python3 -m py_compile \
-  blender_addon/blender_ops/image_to_3d_ai.py \
-  blender_addon/blender_ops/reference_asset_ops.py \
-  blender_addon/reference_generators/sprite_reference_character.py \
-  server/tools/reference_asset_tools.py
-```
+## Contributing
 
-Build the add-on zip:
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for dev setup, code structure, and how to add new tools or providers.
 
-```bash
-python scripts/package_addon.py
-```
-
-Run the procedural reference-character generator directly:
-
-```bash
-/Applications/Blender.app/Contents/MacOS/Blender \
-  --background \
-  --python scripts/create_sprite_reference_3d_character.py
-```
+---
 
 ## License
 
-MIT. Check the licenses of any local image-to-3D model you install beside this
-repo before using its output commercially.
+MIT — see [LICENSE](LICENSE). Check the licenses of any local image-to-3D model weights you install separately before using their output commercially.

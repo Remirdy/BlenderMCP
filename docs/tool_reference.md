@@ -108,6 +108,25 @@ failure: `{ "ok": false, "error": str, "hint": str }`.
 ## Reference image to 3D
 - **create_3d_asset_from_reference_image(reference_image, asset_type, filename)** — create a reference-matched stylized 3D human character with Blend, GLB and preview output.
 
+## Real-world terrain (Satellite → 3D) — Phase A
+- **geocode_location_tool(query)** — turn "Kapadokya", "Bosphorus", "Pamukkale" etc. into lat/lon + bbox.
+- **fetch_elevation_heightmap(lat, lon, radius_km, zoom)** — download real AWS Terrarium elevation tiles and return a decoded heightmap PNG + elevation stats.
+- **create_real_world_terrain_scene(location, radius_km, resolution, exaggeration, style)** — the magic button: geocode → fetch real elevation data → create displaced mesh in Blender with sun + camera.
+
+## Multi-Agent Scene Orchestration (New)
+- **orchestrate_scene_with_agents(prompt, focus_areas, max_iterations, use_vision_critique)** — the main "AI director". Runs specialist agents (lighting, critique via vision, geometry...) in iterative loops with self-reflection.
+- **run_lighting_specialist_pass(mood, time_of_day)** — direct access to the lighting agent.
+- **run_critique_pass()** — run only the powerful vision + quality critique agent (excellent for diagnostics or after terrain creation).
+
+## Real-time Weather Lighting
+- **set_real_time_weather(location, time_of_day, intensity)** — OpenWeatherMap'ten gerçek hava durumu çeker ve Blender'ın güneş pozisyonu + world aydınlatmasını otomatik ayarlar. Terrain sahneleriyle özellikle güçlüdür.
+
+## Other Çılgın Özellik Scaffold'ları (Kısmi Implementasyon)
+- **create_scene_from_video_reference** — Video/frame → 3D reconstruction scaffold
+- **create_physics_from_prompt** — "kumaş dalgalanıyor", "su dökülüyor" gibi prompt'lardan basit fizik
+- **prepare_for_3d_printing** — 3D baskı için manifold + thickness hazırlığı
+- **auto_import_polyhaven_asset** / **search_and_place_asset** — Otomatik asset pipeline
+
 ## Telemetry
 - **get_telemetry_status()** — show telemetry mode and privacy guarantees.
 - **set_telemetry_mode(mode)** — `off|local|anonymous`; default is off.

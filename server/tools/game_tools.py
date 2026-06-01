@@ -50,3 +50,46 @@ def register(mcp: FastMCP) -> None:
     def prepare_for_unreal_export(apply_transforms: bool = True) -> dict:
         """Apply Unreal conventions: correct scale, clean FBX-ready static-mesh names."""
         return call("prepare_for_unreal_export", {"apply_transforms": apply_transforms})
+
+    @mcp.tool()
+    def apply_biome_painter(density: int = 25, seed: int = 42) -> dict:
+        """Procedurally scatter stylized foliage, flowers and rocks across the terrain hills surface."""
+        return call("apply_biome_painter", {"density": density, "seed": seed})
+
+    @mcp.tool()
+    def create_bezier_path(width: float = 1.2, name: str = "Stylized_Curve_Path") -> dict:
+        """Procedurally sweeps a stylized curved path (cobblestone or water) using Bezier curves."""
+        return call("create_bezier_path", {"width": width, "name": name})
+
+    @mcp.tool()
+    def spawn_weather_particles(type: str = "snow", density: int = 120) -> dict:
+        """Spawns animatable particle weather layers representing stylized falling rain or snow cards.
+
+        type: snow | rain
+        """
+        return call("spawn_weather_particles", {"type": type, "density": density})
+
+    @mcp.tool()
+    def create_building_facade(stories: int = 2, width: float = 6.0, height_per_story: float = 3.2) -> dict:
+        """Procedurally construct multi-tier architectural facades featuring columns, arches and window frames."""
+        return call("create_building_facade", {"stories": stories, "width": width, "height_per_story": height_per_story})
+
+    @mcp.tool()
+    def create_procedural_foliage(iterations: int = 3, height: float = 4.5) -> dict:
+        """Generate high-fidelity stylized branching trees utilizing L-system expansion and custom leaves."""
+        return call("create_procedural_foliage", {"iterations": iterations, "height": height})
+
+    @mcp.tool()
+    def create_istanbul_bosphorus(clear_scene: bool = True) -> dict:
+        """Procedurally build a beautiful, professional 3D game scene of the Istanbul Bosphorus Strait.
+        Includes Bosphorus water, Maiden's Tower, Suspension Bosphorus Bridge, European/Asian hills, yalı mansions, Ortaköy mosque, cinematic twilight sunset lighting, and cartoon outlines!
+        """
+        return call("create_istanbul_bosphorus", {"clear_scene": clear_scene})
+
+    @mcp.tool()
+    def create_physics_from_prompt(prompt: str, object_name: str | None = None) -> dict:
+        """
+        Prompt'tan basit fizik simülasyonu tetikler (cloth, fluid, rigid body).
+        Örnek promptlar: "kumaş dalgalanıyor", "su dökülüyor", "nesne düşüyor"
+        """
+        return call("create_physics_from_prompt", {"prompt": prompt, "object_name": object_name})

@@ -1,17 +1,42 @@
 [project]
 name = "remirdy-blender-studio-mcp"
-version = "0.1.0"
+version = "0.2.0"
 description = "A local MCP bridge for controlling Blender, generating scenes, and importing local image-to-3D results."
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [{ name = "Remirdy" }]
 license = { text = "MIT" }
+keywords = ["blender", "mcp", "3d", "ai", "generative", "psd", "image-to-3d"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Multimedia :: Graphics :: 3D Modeling",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Intended Audience :: Developers",
+    "Development Status :: 4 - Beta",
+]
 dependencies = [
     "mcp>=1.2.0",
+    "Pillow>=10.0.0",
+    "psd-tools>=1.9.0",
+    "google-genai>=1.0.0",
+    "playwright>=1.44.0",
 ]
 
+[project.urls]
+Homepage = "https://github.com/remirdy/remirdy-blender-studio-mcp"
+Repository = "https://github.com/remirdy/remirdy-blender-studio-mcp"
+Issues = "https://github.com/remirdy/remirdy-blender-studio-mcp/issues"
+
 [project.optional-dependencies]
-dev = ["pytest>=7.0"]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+]
 
 [project.scripts]
 remirdy-mcp = "server.main:run"
@@ -21,4 +46,15 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["server", "server.tools", "server.schemas", "server.utils"]
+packages = [
+    "server",
+    "server.tools",
+    "server.schemas",
+    "server.utils",
+    "server.providers",
+    "server.agents",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short"

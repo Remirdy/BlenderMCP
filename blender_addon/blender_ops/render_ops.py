@@ -271,3 +271,137 @@ def op_export_turntable_animation(params):
     scene.render.filepath = path
     bpy.ops.render.render(animation=True)
     return {"render_path": path, "frames": frames}
+
+
+def op_setup_camera_auto_focus(params):
+    """Enable depth of field on the active camera and lock its focus point onto an object or rig."""
+    cam = bpy.context.scene.camera
+    if not cam:
+        cam = _ensure_camera()
+
+    target_name = params.get("target_name")
+    target_obj = bpy.data.objects.get(target_name) if target_name else None
+
+    # If no target provided, search for first active armature skeleton in scene
+    if not target_obj:
+        target_obj = next((o for o in bpy.context.scene.objects if o.type == 'ARMATURE'), None)
+    if not target_obj:
+        # Or fall back to any active mesh object
+        target_obj = next((o for o in bpy.context.scene.objects if o.type == 'MESH' and not o.name.startswith("COL_")), None)
+
+    if not target_obj:
+        return {"ok": False, "error": "No mesh or armature found to set focus target."}
+
+    cam.data.dof.use_dof = True
+    cam.data.dof.focus_object = target_obj
+    cam.data.dof.aperture_fstop = float(params.get("fstop", 2.0))
+
+    return {
+        "ok": True,
+        "camera": cam.name,
+        "focus_target": target_obj.name,
+        "fstop": cam.data.dof.aperture_fstop,
+    }
+
+
+# =============================================================================
+# GERÇEK ZAMANLI HAVA DURUMU IŞIĞI
+# =============================================================================
+
+def op_set_weather_environment(params):
+    """OpenWeatherMap verisine göre dünya + güneş + volumetrics ayarlar."""
+    import math
+    import bpy
+
+    condition = params.get("condition", "clear").lower()
+    tod = params.get("time_of_day", "day").lower()
+    intensity = float(params.get("intensity", 1.0))
+    clouds = float(params.get("clouds", 0))
+    location = params.get("location", "")
+
+    # World node tree hazırla
+    world = bpy.context.scene.world
+    if not world:
+        world = bpy.data.worlds.new("Weather_World")
+        bpy.context.scene.world = world
+
+    world.use_nodes = True
+    nodes = world.node_tree.nodes
+    links = world.node_tree.links
+
+    # Temizle
+    for n in list(nodes):
+        if n.name not in {"Background", "World Output"}:
+            nodes.remove(n)
+
+    bg = nodes.get("Background") or nodes.new("ShaderNodeBackground")
+    out = nodes.get("World Output") or nodes.new("ShaderNodeOutputWorld")
+    links.new(bg.outputs[0], out.inputs[0])
+
+    # Renk ve strength kararları
+    if tod == "night":
+        bg_color = (0.02, 0.025, 0.06)
+        strength = 0.15 * intensity
+        sun_energy = 0.3
+        sun_angle = (1.6, 0.3, 2.8)
+    elif tod == "sunset":
+        bg_color = (0.85, 0.35, 0.15)
+        strength = 0.9 * intensity
+        sun_energy = 2.8
+        sun_angle = (1.1, -0.4, 2.4)
+    else:  # day
+        if condition in ("rain", "drizzle", "thunderstorm"):
+            bg_color = (0.55, 0.58, 0.65)
+            strength = 0.6 * intensity
+            sun_energy = 1.8
+        elif clouds > 60:
+            bg_color = (0.72, 0.78, 0.85)
+            strength = 0.75 * intensity
+            sun_energy = 2.2
+        else:
+            bg_color = (0.65, 0.78, 0.95)
+            strength = 1.1 * intensity
+            sun_energy = 3.5
+
+    bg.inputs[0].default_value = (*bg_color, 1.0)
+    bg.inputs[1].default_value = strength
+
+    # Güneş ışığı oluştur / güncelle
+    sun = None
+    for obj in bpy.data.objects:
+        if obj.type == "LIGHT" and obj.data.type == "SUN":
+            sun = obj
+            break
+
+    if not sun:
+        sun_data = bpy.data.lights.new("Weather_Sun", "SUN")
+        sun = bpy.data.objects.new("Weather_Sun", sun_data)
+        bpy.context.scene.collection.objects.link(sun)
+
+    sun.data.energy = sun_energy
+    sun.rotation_euler = sun_angle
+
+    # Basit volumetrics (Cycles için)
+    if tod in ("sunset", "night") or condition in ("rain", "clouds"):
+        vol = nodes.new("ShaderNodeVolumeScatter")
+        vol.inputs[0].default_value = (0.9, 0.92, 0.95, 1.0)
+        vol.inputs[1].default_value = 0.02 * (1.5 if tod == "sunset" else 1.0)
+        links.new(vol.outputs[0], out.inputs[1])
+
+    # HDRI benzeri basit sky texture (eğer varsa)
+    try:
+        sky = nodes.new("ShaderNodeTexSky")
+        sky.sky_type = "HOSEK_WILKIE"
+        sky.sun_direction = (0, 0, 1)
+        links.new(sky.outputs[0], bg.inputs[0])
+    except Exception:
+        pass
+
+    return {
+        "ok": True,
+        "condition": condition,
+        "time_of_day": tod,
+        "sun_energy": sun_energy,
+        "location": location,
+        "message": f"Weather environment applied for {location} ({tod}, {condition})",
+    }

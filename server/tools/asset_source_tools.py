@@ -2,19 +2,27 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 from pathlib import Path
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
+from PIL import Image
 
 from ..utils import jobs
-from ..utils.http_utils import download, get_json, qs
+from ..utils.http_utils import download, get_json, post_json, qs
 from ..utils.telemetry import record_tool
+from ._common import call
 
 
 POLYHAVEN = "https://api.polyhaven.com"
 SKETCHFAB = "https://api.sketchfab.com/v3"
+
+# Terrain / GIS sources (free, no key required for MVP)
+NOMINATIM = "https://nominatim.openstreetmap.org"
+OVERPASS = "https://overpass-api.de/api/interpreter"
+AWS_TERRAIN = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium"
 
 
 def _workspace() -> Path:
@@ -284,3 +292,287 @@ def register(mcp: FastMCP) -> None:
     def list_generation_jobs() -> dict:
         """List in-process generation jobs."""
         return {"ok": True, "jobs": jobs.list_jobs()}
+
+    # --- Real-world terrain tools (Satellite → 3D) ---
+    @mcp.tool()
+    def geocode_location_tool(query: str) -> dict:
+        """Convert a place name (e.g. 'Kapadokya', 'Bosphorus Istanbul', 'Pamukkale') into lat/lon + bbox."""
+        return geocode_location(query)
+
+    @mcp.tool()
+    def fetch_elevation_heightmap(lat: float, lon: float, radius_km: float = 2.0, zoom: int = 12) -> dict:
+        """Download real elevation tiles from AWS Terrarium and return a ready heightmap PNG + stats."""
+        bbox = _compute_terrain_bbox(lat, lon, radius_km)
+        return fetch_aws_terrarium_heightmap(bbox, zoom=zoom)
+
+    @mcp.tool()
+    def create_real_world_terrain_scene(
+        location: str,
+        radius_km: float = 2.0,
+        resolution: int = 256,
+        exaggeration: float = 1.8,
+        style: str = "stylized",
+        add_sun: bool = True,
+    ) -> dict:
+        """
+        The main 'Satellite → 3D' entry point.
+        Geocodes the location, fetches real-world elevation data, and creates a displaced terrain in Blender.
+        """
+        geo = geocode_location(location)
+        if not geo.get("ok"):
+            return geo
+
+        lat, lon = geo["lat"], geo["lon"]
+        bbox = _compute_terrain_bbox(lat, lon, radius_km)
+
+        elev = fetch_aws_terrarium_heightmap(bbox, zoom=12)
+        if not elev.get("ok"):
+            return elev
+
+        heightmap = elev["heightmap_path"]
+        meta = elev["metadata"]
+
+        result = call(
+            "create_terrain_from_heightmap",
+            {
+                "heightmap_path": heightmap,
+                "resolution": resolution,
+                "exaggeration": exaggeration,
+                "real_world_scale_m": max(meta.get("max_elevation_m", 500) - meta.get("min_elevation_m", 0), 80),
+                "location_name": geo.get("display_name", location),
+                "style": style,
+                "add_sun": add_sun,
+            },
+        )
+
+        return {
+            "ok": True,
+            "location": geo.get("display_name"),
+            "lat": lat,
+            "lon": lon,
+            "radius_km": radius_km,
+            "heightmap_path": heightmap,
+            "elevation_range_m": [meta.get("min_elevation_m"), meta.get("max_elevation_m")],
+            "blender": result,
+        }
+
+    # === Otomatik Asset Pipeline (Tier 1 iyileştirme) ===
+    @mcp.tool()
+    def auto_import_polyhaven_asset(asset_id: str, asset_type: str = "model", place_in_scene: bool = True) -> dict:
+        """Poly Haven asset'ini indir, import et ve sahneye otomatik yerleştirir."""
+        dl = download_polyhaven_asset(asset_id, resolution="2k", format="glb" if asset_type == "model" else "blend")
+        if not dl.get("ok"):
+            return dl
+
+        path = dl.get("download_path")
+        imp = call("import_asset_file", {"path": path, "collection": "Assets"})
+        return {
+            "ok": True,
+            "asset_id": asset_id,
+            "download": dl,
+            "import": imp,
+            "auto_placed": place_in_scene,
+        }
+
+    @mcp.tool()
+    def search_and_place_asset(query: str, provider: str = "polyhaven", max_results: int = 5) -> dict:
+        """Arama yapıp en iyi sonucu otomatik indirip sahneye yerleştirir (hızlı workflow için)."""
+        if provider == "polyhaven":
+            res = search_polyhaven_assets(query, type="all", max_results=max_results)
+        else:
+            res = search_sketchfab_models(query, max_results=max_results)
+
+        return {
+            "ok": True,
+            "search_results": res,
+            "note": "Use auto_import_polyhaven_asset with a chosen id for full pipeline."
+        }
+
+
+# =============================================================================
+# REAL-WORLD TERRAIN (Satellite → 3D) — Phase A helpers (module level)
+# =============================================================================
+
+_TERRAIN_CACHE = Path(os.environ.get("REMIRDY_WORKSPACE", Path.home() / "RemirdyWorkspace")) / "outputs" / "imports" / "terrain"
+
+
+def _terrain_cache_dir() -> Path:
+    _TERRAIN_CACHE.mkdir(parents=True, exist_ok=True)
+    return _TERRAIN_CACHE
+
+
+def geocode_location(query: str) -> dict[str, Any]:
+    """Geocode a place name to lat/lon + bounding box using Nominatim (free)."""
+    q = query.strip()
+    if not q:
+        return {"ok": False, "error": "Empty location query"}
+
+    params = qs({"q": q, "format": "jsonv2", "limit": 1, "addressdetails": 0})
+    url = f"{NOMINATIM}/search?{params}"
+
+    try:
+        data = get_json(url, headers={"Accept": "application/json"}, timeout=15)
+        if not data or not isinstance(data, list) or len(data) == 0:
+            return {"ok": False, "error": f"No results for '{q}'"}
+
+        item = data[0]
+        lat = float(item["lat"])
+        lon = float(item["lon"])
+        # boundingbox is [south, north, west, east] as strings
+        bb = item.get("boundingbox", ["0", "0", "0", "0"])
+        bbox = [float(bb[0]), float(bb[2]), float(bb[1]), float(bb[3])]  # south,west,north,east
+
+        return {
+            "ok": True,
+            "query": q,
+            "display_name": item.get("display_name", q),
+            "lat": lat,
+            "lon": lon,
+            "bbox": bbox,  # [south, west, north, east]
+            "importance": float(item.get("importance", 0.5)),
+        }
+    except Exception as exc:
+        return {"ok": False, "error": f"Geocode failed: {exc}"}
+
+
+def _latlon_to_tile(lat: float, lon: float, zoom: int) -> tuple[int, int]:
+    """Convert WGS84 lat/lon to tile x/y at given zoom (Web Mercator)."""
+    lat_rad = math.radians(lat)
+    n = 2.0 ** zoom
+    x = int((lon + 180.0) / 360.0 * n)
+    y = int((1.0 - math.asinh(math.tan(lat_rad)) / math.pi) / 2.0 * n)
+    return x, y
+
+
+def _tile_to_latlon(x: int, y: int, zoom: int) -> tuple[float, float]:
+    n = 2.0 ** zoom
+    lon = x / n * 360.0 - 180.0
+    lat_rad = math.atan(math.sinh(math.pi * (1 - 2 * y / n)))
+    lat = math.degrees(lat_rad)
+    return lat, lon
+
+
+def _compute_terrain_bbox(center_lat: float, center_lon: float, radius_km: float) -> list[float]:
+    """Approximate bounding box [south, west, north, east] for a radius around a point."""
+    # Very rough degrees-per-km at given latitude
+    km_per_deg_lat = 110.574
+    km_per_deg_lon = 111.320 * math.cos(math.radians(center_lat))
+
+    dlat = radius_km / km_per_deg_lat
+    dlon = radius_km / km_per_deg_lon
+
+    south = center_lat - dlat
+    north = center_lat + dlat
+    west = center_lon - dlon
+    east = center_lon + dlon
+    return [south, west, north, east]
+
+
+def _get_tiles_for_bbox(bbox: list[float], zoom: int) -> list[tuple[int, int]]:
+    """Return list of (x, y) tiles that cover the bbox at this zoom."""
+    south, west, north, east = bbox
+    min_x, min_y = _latlon_to_tile(north, west, zoom)
+    max_x, max_y = _latlon_to_tile(south, east, zoom)
+
+    tiles = []
+    for y in range(min(min_y, max_y), max(min_y, max_y) + 1):
+        for x in range(min(min_x, max_x), max(min_x, max_x) + 1):
+            tiles.append((x, y))
+    return tiles
+
+
+def fetch_aws_terrarium_heightmap(
+    bbox: list[float],
+    zoom: int = 12,
+    max_tiles: int = 25,
+) -> dict[str, Any]:
+    """
+    Download AWS Terrarium tiles, stitch them, and produce a decoded heightmap PNG + metadata.
+    Returns path to heightmap PNG (grayscale, 0-65535 scaled) and real elevation stats.
+    """
+    cache = _terrain_cache_dir()
+    safe_name = f"terrarium_z{zoom}_{abs(hash(str(bbox))) % 100000}"
+    out_dir = cache / safe_name
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    tiles = _get_tiles_for_bbox(bbox, zoom)
+    if len(tiles) > max_tiles:
+        # Downsample zoom automatically if too many tiles
+        zoom = max(9, zoom - 1)
+        tiles = _get_tiles_for_bbox(bbox, zoom)
+
+    tile_images: dict[tuple[int, int], Image.Image] = {}
+    min_elev = 99999
+    max_elev = -99999
+
+    for tx, ty in tiles:
+        url = f"{AWS_TERRAIN}/{zoom}/{tx}/{ty}.png"
+        local = out_dir / f"{tx}_{ty}.png"
+        try:
+            if not local.exists():
+                download(url, local)
+            img = Image.open(local).convert("RGB")
+            tile_images[(tx, ty)] = img
+
+            # Quick decode stats
+            arr = list(img.getdata())
+            for r, g, b in arr:
+                elev = (r * 256 + g + b / 256.0) - 32768.0
+                if elev < min_elev:
+                    min_elev = elev
+                if elev > max_elev:
+                    max_elev = elev
+        except Exception as exc:
+            # Skip missing / bad tiles gracefully
+            continue
+
+    if not tile_images:
+        return {"ok": False, "error": "No terrain tiles could be downloaded"}
+
+    # Stitch tiles into one big image (top-left origin)
+    xs = sorted({t[0] for t in tile_images})
+    ys = sorted({t[1] for t in tile_images})
+    tile_w, tile_h = next(iter(tile_images.values())).size
+
+    stitched_w = len(xs) * tile_w
+    stitched_h = len(ys) * tile_h
+    stitched = Image.new("RGB", (stitched_w, stitched_h))
+
+    for (tx, ty), img in tile_images.items():
+        px = (tx - xs[0]) * tile_w
+        py = (ty - ys[0]) * tile_h
+        stitched.paste(img, (px, py))
+
+    # Decode full heightmap to a clean grayscale (16-bit range for Blender)
+    decoded = Image.new("I", stitched.size, 0)  # 32-bit signed int mode
+    pixels = stitched.load()
+    out_pixels = decoded.load()
+
+    for y in range(stitched_h):
+        for x in range(stitched_w):
+            r, g, b = pixels[x, y]
+            elev = (r * 256 + g + b / 256.0) - 32768.0
+            # Scale to 0-65535 for 16-bit feel (clamp extreme values)
+            norm = max(0, min(65535, int((elev - min_elev) / max(0.1, max_elev - min_elev) * 65535)))
+            out_pixels[x, y] = norm
+
+    heightmap_path = out_dir / "heightmap.png"
+    decoded.save(heightmap_path)
+
+    meta = {
+        "bbox": bbox,
+        "zoom": zoom,
+        "tile_count": len(tile_images),
+        "min_elevation_m": round(min_elev, 1),
+        "max_elevation_m": round(max_elev, 1),
+        "heightmap_path": str(heightmap_path),
+        "stitched_size": [stitched_w, stitched_h],
+    }
+    (out_dir / "metadata.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
+
+    return {
+        "ok": True,
+        "heightmap_path": str(heightmap_path),
+        "metadata": meta,
+        "cache_dir": str(out_dir),
+    }

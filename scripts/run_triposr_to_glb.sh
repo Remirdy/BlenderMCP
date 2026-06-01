@@ -9,6 +9,11 @@ fi
 IMAGE_PATH="$1"
 OUTPUT_GLB="$2"
 
+if [ -f "${OUTPUT_GLB}" ]; then
+  echo "Output GLB already exists at ${OUTPUT_GLB}, skipping reconstruction."
+  exit 0
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 DEFAULT_TRIPOSR_DIR="$(cd "${PROJECT_DIR}/.." && pwd)/ai_models/TripoSR"

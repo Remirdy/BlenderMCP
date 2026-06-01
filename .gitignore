@@ -8,7 +8,26 @@ workspace/
 outputs/
 RemirdyWorkspace/
 *.blend1
+*.blend
 dist/
 build/
 *.egg-info/
 remirdy_blender_studio.zip
+
+# Logs
+*.log
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Test / coverage artefacts
+.pytest_cache/
+.mypy_cache/
+htmlcov/
+coverage.xml
+.coverage
+
+# Scratch / temp work dirs
+scratch/
