@@ -72,3 +72,11 @@ def register(mcp: FastMCP) -> None:
     ) -> dict:
         """Render a high-quality final image to outputs/renders and return its path."""
         return call("render_final", {"width": width, "height": height, "samples": samples, "filename": filename})
+
+    @mcp.tool()
+    def setup_camera_auto_focus(target_name: str = "", fstop: float = 2.0) -> dict:
+        """Enable camera Depth of Field (lens blur) and lock focus onto a specific rig or object.
+
+        Locks target focus onto character or environment landmark, making rendering look extremely professional.
+        """
+        return call("setup_camera_auto_focus", {"target_name": target_name, "fstop": fstop})

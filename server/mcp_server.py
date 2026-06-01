@@ -9,25 +9,37 @@ from __future__ import annotations
 from mcp.server.fastmcp import FastMCP
 
 from .tools import (
+    agent_tools,
     architecture_tools,
     asset_tools,
     asset_source_tools,
+    browser_tools,       # API-less: Midjourney / ChatGPT / Leonardo / DALL-E / Ideogram
     character_tools,
+    comfyui_tools,       # ComfyUI / Stable Diffusion local
     connection_tools,
     export_tools,
     game_tools,
     import_tools,
     interior_tools,
+    lipsync_tools,       # Lip sync animation
     marketplace_tools,
     material_tools,
     modular_tools,
+    multi_llm_tools,     # Parallel Claude + ChatGPT + Gemini orchestration
+    nerf_tools,          # NeRF / Gaussian Splatting → Blender
     product_tools,
     reference_asset_tools,
     quality_tools,
     render_tools,
     scene_tools,
+    sequel_tools,        # .blend DNA + sequel scene generator
+    sound_tools,         # Automatic sound design
     telemetry_tools,
+    tournament_tools,    # Genetic algorithm scene tournament
     understanding_tools,
+    unity_tools,         # Complete Unity project export
+    weather_tools,
+    world_tools,         # Procedural narrative world — create_world()
 )
 from .utils.logging_utils import get_logger
 
@@ -36,23 +48,23 @@ log = get_logger("remirdy.server")
 INSTRUCTIONS = """
 Remirdy Blender Studio MCP — a local MCP bridge for Blender.
 
-Use these tools to build game-ready assets, stylized environments, architectural
-exteriors, interiors, product renders and cinematic scenes, then inspect, fix,
-render and export them (GLB/FBX/OBJ/blend) with Unity/Unreal presets.
-
-For reference-image work, use create_3d_asset_from_reference_image. If a local
-image-to-3D command is configured, the bridge waits for the generated GLB and
-imports it into Blender. If it is not configured, the tool reports the reason
-and uses the procedural fallback.
+Core:   scene/render/export/materials/characters/game/interior/architecture tools.
+AI:     Gemini Vision, Multi-Agent orchestration, scene tournament (genetic algorithm).
+Media:  ComfyUI/SD textures, NeRF/3DGS photogrammetry, lip sync, sound design.
+World:  create_world() — narrative-driven full world generation.
+Story:  generate_sequel_scene() — .blend DNA → same-universe new scene.
+Web:    API-less Midjourney/ChatGPT/Leonardo/DALL-E/Ideogram → Blender pipeline.
+LLM:    plan_scene_with_all_llms() — Claude + ChatGPT + Gemini in parallel.
+Unity:  export_complete_unity_project() — .unitypackage with C# scripts + NavMesh.
 
 Typical flow:
   1. connect_blender
-  2. create_scene_from_prompt  (or a specific create_* tool)
+  2. create_scene_from_prompt  (or create_world for full world-building)
   3. scene_quality_check / auto_fix_scene
-  4. render_preview
-  5. export_glb / prepare_for_unity_export
+  4. design_scene_audio        (ambient sound + optional narration)
+  5. render_preview
+  6. export_complete_unity_project / export_glb
 
-The server talks to Blender through a local socket bridge (the Remirdy add-on).
 Raw Python execution is NOT exposed by default.
 """.strip()
 
@@ -79,6 +91,18 @@ def build_server() -> FastMCP:
         product_tools,
         reference_asset_tools,
         marketplace_tools,
+        agent_tools,       # Multi-Agent Scene Orchestration
+        weather_tools,     # Real-time weather
+        browser_tools,     # API-less image gen → Blender
+        tournament_tools,  # Genetic algorithm tournament
+        sequel_tools,      # DNA analysis + sequel generator
+        world_tools,       # Procedural narrative world
+        comfyui_tools,     # ComfyUI / Stable Diffusion local
+        sound_tools,       # Automatic sound design
+        nerf_tools,        # NeRF / Gaussian Splatting
+        lipsync_tools,     # Lip sync animation
+        multi_llm_tools,   # Multi-LLM orchestration
+        unity_tools,       # Complete Unity project export
     ):
         module.register(mcp)
         log.info("Registered tools from %s", module.__name__)

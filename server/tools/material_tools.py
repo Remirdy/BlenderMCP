@@ -59,3 +59,29 @@ def register(mcp: FastMCP) -> None:
     def create_emissive_materials(color: str = "blue", strength: float = 5.0) -> dict:
         """Create sci-fi emissive panel materials (blue | cyan | magenta | orange)."""
         return call("create_emissive_materials", {"color": color, "strength": strength})
+
+    @mcp.tool()
+    def apply_color_palette_from_image(reference_image: str) -> dict:
+        """Extract a color palette from an image and apply it dynamically across all scene materials.
+
+        Creates beautifully tuned harmonized material colors based on visual color analysis.
+        """
+        return call("apply_color_palette_from_image", {"reference_image": reference_image})
+
+    @mcp.tool()
+    def apply_cel_shading_outline(thickness: float = 0.015, selected_only: bool = False) -> dict:
+        """Add a professional inverted-hull stylized outline cel-shading modifier to objects.
+
+        This creates classic high-fidelity cartoon and anime contours dynamically.
+        """
+        return call("apply_cel_shading_outline", {"thickness": thickness, "selected_only": selected_only})
+
+    @mcp.tool()
+    def bake_pbr_textures(width: int = 1024, height: int = 1024) -> dict:
+        """Automatically bake lighting, AO, normal and roughness maps into images using Blender's Cycles engine."""
+        return call("bake_pbr_textures", {"width": width, "height": height})
+
+    @mcp.tool()
+    def generate_ai_textures(prompt: str = "stylized medieval handpainted stone tiles", target_object: str = "") -> dict:
+        """Submit a text prompt to generate custom seamless textures and auto-apply them to selected UV coordinates."""
+        return call("generate_ai_textures", {"prompt": prompt, "target_object": target_object})

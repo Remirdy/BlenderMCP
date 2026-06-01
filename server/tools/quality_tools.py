@@ -81,3 +81,13 @@ def register(mcp: FastMCP) -> None:
     def check_license_metadata() -> dict:
         """Check imported asset folders for attribution/license metadata."""
         return call("check_license_metadata")
+
+    @mcp.tool()
+    def apply_quad_remesh(voxel_size: float = 0.035, selected_only: bool = True) -> dict:
+        """Run Blender's built-in Voxel Remesher on dense AI meshes to generate a clean quad layout."""
+        return call("apply_quad_remesh", {"voxel_size": voxel_size, "selected_only": selected_only})
+
+    @mcp.tool()
+    def apply_voxel_blockout(depth: int = 6, selected_only: bool = True) -> dict:
+        """Dynamically reconstruct selected models as highly stylized voxel blocks utilizing Remesh modifiers."""
+        return call("apply_voxel_blockout", {"depth": depth, "selected_only": selected_only})
