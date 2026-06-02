@@ -866,6 +866,124 @@ def _local_human_provider_status():
     }
 
 
+def _object_bounds(obj):
+    corners = [obj.matrix_world @ mathutils.Vector(corner) for corner in obj.bound_box]
+    min_x = min(c.x for c in corners)
+    max_x = max(c.x for c in corners)
+    min_y = min(c.y for c in corners)
+    max_y = max(c.y for c in corners)
+    min_z = min(c.z for c in corners)
+    max_z = max(c.z for c in corners)
+    return min_x, max_x, min_y, max_y, min_z, max_z
+
+
+def _create_mpfb_runway_human(name, animation="walk_preview", frames=96):
+    """Create a local MPFB human and add simple runway presentation elements."""
+    coll = H.get_or_create_collection(CHARACTER_COLLECTION)
+    result = bpy.ops.mpfb.create_human()
+    human = bpy.context.object if bpy.context.object and bpy.context.object.type == "MESH" else bpy.data.objects.get("Human")
+    if human is None:
+        raise RuntimeError(f"MPFB create_human did not create a mesh: {result}")
+    human.name = name
+    human.data.name = f"{name}_Mesh"
+    H.link_to_collection(human, coll)
+
+    bpy.ops.object.select_all(action="DESELECT")
+    human.select_set(True)
+    bpy.context.view_layer.objects.active = human
+    rig_result = None
+    if hasattr(bpy.ops, "mpfb") and hasattr(bpy.ops.mpfb, "add_standard_rig") and bpy.ops.mpfb.add_standard_rig.poll():
+        rig_result = bpy.ops.mpfb.add_standard_rig()
+        rig = next((o for o in bpy.context.scene.objects if o.type == "ARMATURE" and "rig" in o.name.lower()), None)
+        if rig:
+            rig.name = f"{name}_Rig"
+            H.link_to_collection(rig, H.get_or_create_collection("CharacterRig"))
+    else:
+        rig = None
+
+    coat = _mat("MPFB_Runway_Black_Coat", (0.015, 0.018, 0.024, 1), roughness=0.36)
+    silk = _mat("MPFB_Runway_Champagne_Silk", (0.78, 0.68, 0.52, 1), roughness=0.3)
+    gold = _mat("MPFB_Runway_Gold_Trim", (0.92, 0.64, 0.24, 1), metallic=0.7, roughness=0.24)
+
+    min_x, max_x, min_y, max_y, min_z, max_z = _object_bounds(human)
+    height = max_z - min_z
+    cx = (min_x + max_x) / 2
+    front_y = min_y - height * 0.025
+    back_y = max_y + height * 0.025
+    shoulder_z = min_z + height * 0.72
+    waist_z = min_z + height * 0.52
+    hem_z = min_z + height * 0.12
+    shoulder_w = (max_x - min_x) * 0.55
+    hem_w = (max_x - min_x) * 0.78
+
+    clothing = [
+        _add_cloth_panel(
+            "MPFB_Runway_Coat_Left",
+            [(cx - shoulder_w, front_y, shoulder_z), (cx - 0.04, front_y, shoulder_z - height * 0.03),
+             (cx - 0.08, front_y, hem_z), (cx - hem_w, front_y, hem_z)],
+            coat,
+            coll,
+        ),
+        _add_cloth_panel(
+            "MPFB_Runway_Coat_Right",
+            [(cx + 0.04, front_y, shoulder_z - height * 0.03), (cx + shoulder_w, front_y, shoulder_z),
+             (cx + hem_w, front_y, hem_z), (cx + 0.08, front_y, hem_z)],
+            coat,
+            coll,
+        ),
+        _add_cloth_panel(
+            "MPFB_Runway_Coat_Back",
+            [(cx - shoulder_w, back_y, shoulder_z), (cx + shoulder_w, back_y, shoulder_z),
+             (cx + hem_w, back_y, hem_z), (cx - hem_w, back_y, hem_z)],
+            coat,
+            coll,
+        ),
+        _add_cloth_panel(
+            "MPFB_Runway_Silk_Front",
+            [(cx - shoulder_w * 0.38, front_y - height * 0.01, waist_z + height * 0.16),
+             (cx + shoulder_w * 0.38, front_y - height * 0.01, waist_z + height * 0.16),
+             (cx + hem_w * 0.42, front_y - height * 0.012, hem_z + height * 0.04),
+             (cx - hem_w * 0.42, front_y - height * 0.012, hem_z + height * 0.04)],
+            silk,
+            coll,
+        ),
+    ]
+    for i, x in enumerate([cx - hem_w * 0.28, cx - hem_w * 0.14, cx, cx + hem_w * 0.14, cx + hem_w * 0.28]):
+        clothing.append(_add_curve(
+            f"MPFB_Runway_Gold_Stitch_{i}",
+            [(x, front_y - height * 0.018, waist_z + height * 0.12), (x * 1.02, front_y - height * 0.02, hem_z + height * 0.06)],
+            gold,
+            coll,
+            bevel=0.004,
+        ))
+    clothing.append(_add_cube(
+        "MPFB_Runway_Belt",
+        (cx, front_y - height * 0.018, waist_z),
+        (hem_w * 0.85, height * 0.018, height * 0.026),
+        gold,
+        coll,
+        bevel=0.006,
+    ))
+
+    _setup_fashion_stage()
+    bpy.context.scene.frame_start = 1
+    bpy.context.scene.frame_end = int(frames)
+    return {
+        "character": name,
+        "style": "mpfb_human",
+        "realism": "realistic",
+        "topology": "mpfb_mesh",
+        "human_provider": "mpfb",
+        "api_required": False,
+        "mesh": human.name,
+        "rig": rig.name if rig else None,
+        "rig_result": list(rig_result) if rig_result else None,
+        "clothing_parts": len(clothing),
+        "animation": {"animation": animation, "frames": int(frames), "note": "MPFB rig created; animation retargeting is a follow-up step."},
+        "suggested_next": ["render_preview", "export_character_glb"],
+    }
+
+
 def op_create_api_free_runway_show(params):
     """Create a runway-ready human character without cloud APIs.
 
@@ -874,13 +992,24 @@ def op_create_api_free_runway_show(params):
     in-Blender fashion runway generator.
     """
     status = _local_human_provider_status()
+    if params.get("clear_scene", True):
+        _clear_scene()
     provider = params.get("provider", "auto")
     if provider == "auto":
         provider = status["preferred"]
 
-    # The local provider hook is intentionally conservative: MPFB/MakeHuman
-    # operator names vary by installation, so until a provider is detected and
-    # mapped explicitly we use the built-in fashion generator.
+    if provider == "mpfb":
+        try:
+            result = _create_mpfb_runway_human(
+                params.get("name", "API Free Runway Model"),
+                animation=params.get("animation", "walk_preview"),
+                frames=int(params.get("frames", 96)),
+            )
+            result["provider_status"] = status
+            return result
+        except Exception as exc:
+            print(f"MPFB provider failed, falling back to procedural fashion: {exc}")
+
     result = op_create_rigged_character({
         "name": params.get("name", "API Free Runway Model"),
         "style": "fashion_runway",
@@ -893,12 +1022,7 @@ def op_create_api_free_runway_show(params):
     result["human_provider"] = provider
     result["provider_status"] = status
     result["api_required"] = False
-    result["note"] = (
-        "Using procedural_fashion fallback. Install MPFB/MakeHuman locally in "
-        "Blender to enable imported realistic human meshes without any API."
-        if provider == "procedural_fashion" else
-        f"Detected local provider '{provider}', but explicit operator mapping is not configured yet."
-    )
+    result["note"] = "Using procedural_fashion fallback."
     return result
 
 
