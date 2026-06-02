@@ -327,11 +327,57 @@ def create_with_local_command(reference_image: str, glb_path: str, params: dict[
     }
 
 
+def create_with_procedural(reference_image: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Install-free, API-free image->3D using Blender's bundled numpy/bmesh.
+
+    Builds a real, textured, volumetric mesh (silhouette + luminance relief)
+    directly in the scene. The created object name starts with
+    'AI_Reconstructed_' so the existing camera-framing / auto-rig flow picks it
+    up exactly like an imported GLB.
+    """
+    from . import local_image_to_3d as LI
+
+    params = dict(params or {})
+    params.setdefault("name", "AI_Reconstructed_ImageModel")
+    try:
+        info = LI.create_local_image_to_3d(reference_image, params)
+    except Exception as exc:  # numpy / mask / io failures
+        raise ImageTo3DError(f"procedural image-to-3d failed: {exc}") from exc
+    imported = info.get("object")
+    fit_info = _fit_imported_scene([imported] if imported else None, params)
+    return {
+        "provider": "local_procedural",
+        "imported_objects": [imported] if imported else [],
+        "fit_info": fit_info,
+        "model_info": info,
+        "note": info.get("note"),
+    }
+
+
 def create_ai_image_to_3d(reference_image: str, glb_path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
     provider = (params or {}).get("provider") or os.environ.get("REMIRDY_IMAGE_TO_3D_PROVIDER", "local")
     provider = provider.lower().strip()
+
+    # Explicit no-install / no-API procedural path.
+    if provider in {"procedural", "builtin", "offline"}:
+        return create_with_procedural(reference_image, params)
+
     if provider in {"local", "local_command", "mcp"}:
-        return create_with_local_command(reference_image, glb_path, params)
+        # Prefer an external runner ONLY if the user configured one; otherwise
+        # fall back to the install-free procedural builder so "local" always
+        # works with zero setup.
+        has_cmd = bool(
+            (params or {}).get("local_command")
+            or os.environ.get("REMIRDY_LOCAL_IMAGE_TO_3D_COMMAND")
+            or os.environ.get("REMIRDY_IMAGE_TO_3D_COMMAND")
+        )
+        if has_cmd:
+            try:
+                return create_with_local_command(reference_image, glb_path, params)
+            except ImageTo3DError:
+                return create_with_procedural(reference_image, params)
+        return create_with_procedural(reference_image, params)
+
     if provider == "meshy":
         return create_with_meshy(reference_image, glb_path, params)
     if provider in {"auto", "parallel"}:

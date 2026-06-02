@@ -6,6 +6,7 @@ The bridge ONLY dispatches names found in this registry. There is no generic
 from __future__ import annotations
 
 from . import (
+    animation_ops as AN,
     architecture_ops as A,
     asset_ops as AS,
     character_ops as C,
@@ -15,12 +16,16 @@ from . import (
     interior_ops as I,
     material_ops as M,
     modular_ops as MK,
+    node_design_ops as ND,
+    particle_ops as PA,
+    uv_ops as UV,
     packaging_ops as PK,
     product_ops as PR,
     quality_ops as Q,
     render_ops as R,
     reference_asset_ops as RA,
     layered_scene_ops as L,
+    local_image_to_3d as LI,
     scene_ops as S,
     scoring_ops as SC,
     terrain_ops as T,
@@ -97,6 +102,7 @@ REGISTRY = {
     "inspect_scene": S.op_inspect_scene,
     "clear_scene": S.op_clear_scene,
     "create_collection": S.op_create_collection,
+    "create_primitive": S.op_create_primitive,
     "capture_viewport_screenshot": U.op_capture_viewport_screenshot,
     "capture_scene_contact_sheet": U.op_capture_scene_contact_sheet,
     "analyze_scene_visuals": U.op_analyze_scene_visuals,
@@ -130,10 +136,14 @@ REGISTRY = {
     "create_procedural_city_blockout": G.op_create_procedural_city_blockout,
     # character tools
     "create_rigged_character": C.op_create_rigged_character,
+    "create_api_free_runway_show": C.op_create_api_free_runway_show,
     "add_character_animation": C.op_add_character_animation,
     "validate_character_rig": C.op_validate_character_rig,
     "export_character_glb": C.op_export_character_glb,
     "create_3d_asset_from_reference_image": RA.op_create_3d_asset_from_reference_image,
+    # install-free / API-free image -> 3D (built-in numpy/bmesh)
+    "create_model_from_image": LI.op_create_model_from_image,
+    "create_relief_from_image": LI.op_create_relief_from_image,
     "create_layered_depth_scene": L.op_create_layered_depth_scene,
     "bind_auto_weights": C.op_bind_auto_weights,
     # terrain (Satellite → 3D)
@@ -185,6 +195,46 @@ REGISTRY = {
     "compile_texture_atlas": M.op_compile_texture_atlas,
     "bake_pbr_textures": M.op_bake_pbr_textures,
     "generate_ai_textures": M.op_generate_ai_textures,
+    # ---- node-based design (Geometry Nodes + Shader Nodes) ----
+    "build_geometry_node_graph": ND.op_build_geometry_node_graph,
+    "apply_geometry_node_preset": ND.op_apply_geometry_node_preset,
+    "build_shader_node_graph": ND.op_build_shader_node_graph,
+    "apply_shader_node_preset": ND.op_apply_shader_node_preset,
+    "inspect_node_graph": ND.op_inspect_node_graph,
+    "list_node_presets": ND.op_list_node_presets,
+    # reusable node groups
+    "create_node_group": ND.op_create_node_group,
+    "instance_node_group": ND.op_instance_node_group,
+    "list_node_groups": ND.op_list_node_groups,
+    # exposed geometry-node modifier inputs (sliders)
+    "expose_geometry_input": ND.op_expose_geometry_input,
+    "set_geometry_input": ND.op_set_geometry_input,
+    # compositor (post-process) node graph
+    "build_compositor_graph": ND.op_build_compositor_graph,
+    "apply_compositor_preset": ND.op_apply_compositor_preset,
+    # ---- animation, drivers, timeline, history ----
+    "keyframe_object": AN.op_keyframe_object,
+    "animate_property": AN.op_animate_property,
+    "animate_node_input": AN.op_animate_node_input,
+    "add_driver": AN.op_add_driver,
+    "set_frame_range": AN.op_set_frame_range,
+    "create_turntable": AN.op_create_turntable,
+    "clear_animation": AN.op_clear_animation,
+    "checkpoint": AN.op_checkpoint,
+    "undo": AN.op_undo,
+    "redo": AN.op_redo,
+    # ---- particle / scatter / vegetation (game-ready) ----
+    "scatter_objects": PA.op_scatter_objects,
+    "scatter_collection": PA.op_scatter_collection,
+    "create_grass_field": PA.op_create_grass_field,
+    "scatter_debris": PA.op_scatter_debris,
+    "add_hair_fur": PA.op_add_hair_fur,
+    "convert_particles_to_mesh": PA.op_convert_particles_to_mesh,
+    # ---- UV unwrapping ----
+    "smart_uv_project": UV.op_smart_uv_project,
+    "unwrap": UV.op_unwrap,
+    "mark_seams_by_angle": UV.op_mark_seams_by_angle,
+    "pack_uv_islands": UV.op_pack_uv_islands,
     # quality / organization
     "organize_scene": Q.op_organize_scene,
     "rename_objects_professionally": Q.op_rename_objects_professionally,
@@ -273,8 +323,24 @@ REGISTRY = {
 }
 
 
+def _suggest_ops(op: str, limit: int = 5) -> list:
+    """Return the closest registered op names to help the caller self-correct."""
+    import difflib
+    names = list(REGISTRY.keys())
+    close = difflib.get_close_matches(op, names, n=limit, cutoff=0.4)
+    if not close:
+        # fall back to substring matches on any token
+        token = op.split("_")[0] if "_" in op else op
+        close = [n for n in names if token and token in n][:limit]
+    return close
+
+
 def dispatch(op: str, params: dict) -> dict:
     handler = REGISTRY.get(op)
     if handler is None:
-        raise ValueError(f"Unknown operation '{op}'. Not in the Remirdy registry.")
+        suggestions = _suggest_ops(op)
+        hint = f" Did you mean: {', '.join(suggestions)}?" if suggestions else ""
+        raise ValueError(
+            f"Unknown operation '{op}'. Not in the Remirdy registry.{hint}"
+        )
     return handler(params or {})

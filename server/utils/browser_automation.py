@@ -641,6 +641,8 @@ async def generate_and_build_scene(
     build_scene: bool = True,
     channel_url: str | None = None,
     wait_seconds: int = 120,
+    vision_provider: str = "auto",
+    ctx: Any | None = None,
 ) -> dict[str, Any]:
     """
     End-to-end: generate image on a web platform → build 3D Blender scene.
@@ -649,10 +651,16 @@ async def generate_and_build_scene(
     2. Optionally pass the image to psd_utils + layered_scene_ops for 3D build.
     """
     platform = platform.lower().strip()
+    vision_provider = vision_provider.lower().strip()
     if platform not in PLATFORM_GENERATORS:
         return {
             "ok": False,
             "error": f"Unknown platform '{platform}'. Choose: {', '.join(PLATFORM_GENERATORS)}",
+        }
+    if vision_provider not in {"auto", "host", "gemini", "none"}:
+        return {
+            "ok": False,
+            "error": "vision_provider must be one of: auto, host, gemini, none",
         }
 
     safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in prompt[:40])
@@ -684,10 +692,36 @@ async def generate_and_build_scene(
     # Build Blender scene from generated image
     try:
         from .psd_utils import parse_layered_image
+        from .ai_vision import generate_scene_plan, generate_scene_plan_with_host_ai, is_available as gemini_available
         from ..tools._common import call
 
         out_dir = _workspace_output("scene_layers", safe_name)
-        layers = parse_layered_image(actual_image, out_dir)
+        layers = parse_layered_image(
+            actual_image,
+            out_dir,
+            use_gemini_ai=(vision_provider == "gemini"),
+        )
+
+        if not layers.get("ai_scene_plan"):
+            analysis_image = layers.get("analysis_image_path") or actual_image
+            if vision_provider in {"auto", "host"} and ctx is not None:
+                host_plan = await generate_scene_plan_with_host_ai(
+                    ctx,
+                    analysis_image,
+                    layers.get("layers") or None,
+                )
+                if host_plan:
+                    layers["ai_scene_plan"] = host_plan
+                    layers["ai_scene_plan_provider"] = "host"
+            if (
+                not layers.get("ai_scene_plan")
+                and vision_provider in {"auto", "gemini"}
+                and gemini_available()
+            ):
+                gemini_plan = generate_scene_plan(analysis_image, layers.get("layers") or None)
+                if gemini_plan:
+                    layers["ai_scene_plan"] = gemini_plan
+                    layers["ai_scene_plan_provider"] = "gemini"
 
         scene_result = call("build_layered_scene_from_image", {
             "image_path": actual_image,
@@ -700,6 +734,7 @@ async def generate_and_build_scene(
             "scene_built": True,
             "layers_detected": len(layers.get("layers", [])),
             "ai_scene_plan": layers.get("ai_scene_plan"),
+            "ai_scene_plan_provider": layers.get("ai_scene_plan_provider"),
             "scene_result": scene_result,
         }
     except Exception as exc:

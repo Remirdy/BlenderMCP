@@ -1,6 +1,7 @@
 # Satellite → 3D + Multi-Agent Scene Orchestration — Implementation Plan
 
-**Goal**: Deliver two high-impact "yapılabilir ama çılgın" Tier-2 features that dramatically increase the "wow" factor of Remirdy while staying compatible with the existing architecture.
+**Goal**: define two higher-level workflows that build on the existing
+architecture without changing the bridge safety model.
 
 - **Satellite → 3D Terrain**: Turn any real-world location ("Kapadokya", "Bosphorus Strait", "Tokyo Shibuya crossing") into a production-ready Blender terrain with optional OSM buildings, roads, and water.
 - **Multi-Agent Scene Production**: A built-in specialist agent coordinator (inspired by the existing `providers/registry.py` parallel orchestration) that runs Geometry → Materials → Lighting → Composition → Critique (vision) loops.
@@ -32,7 +33,7 @@ Remirdy:
 
 Result: A geolocated, measurable, production-usable terrain blockout in < 60 seconds.
 
-### 1.2 Data Sources (Chosen for "Makul + Çılgın" balance)
+### 1.2 Data Sources
 
 | Source              | Purpose                  | Key / Cost     | Priority | Notes |
 |---------------------|--------------------------|----------------|----------|-------|
@@ -133,14 +134,14 @@ class SceneCoordinator:
 ```
 
 Expose both:
-- **High-level tool**: `orchestrate_scene_with_agents(...)` (the "çılgın but usable" button)
+- **High-level tool**: `orchestrate_scene_with_agents(...)`
 - **Granular tools** so the calling LLM (or human) can run custom workflows:
   - `run_geometry_specialist_pass(plan)`
   - `run_lighting_specialist_pass(mood, time_of_day)`
   - `run_vision_critique(return_suggestions=True)`
   - `apply_critique_suggestions(suggestions)`
 
-### 2.4 Vision-in-the-Loop (The Killer Feature)
+### 2.4 Vision-in-the-Loop
 
 This is what makes it truly multi-agent and not just sequential scripts:
 
@@ -184,7 +185,7 @@ This closes the loop using tools that **already exist** (`understanding_tools`).
 
 Because the two features are synergistic:
 
-1. **Week 1-1.5**: Satellite Terrain Phase A + B (the data fetching + basic mesh is pure server + one new Blender op file). This is the more "self-contained wow".
+1. **Week 1-1.5**: Satellite Terrain Phase A + B (the data fetching + basic mesh is pure server + one new Blender op file).
 2. **Week 1.5-2.5**: Multi-Agent Foundation + Geometry + Lighting specialists + first vision loop. The terrain work gives us a perfect test case ("make the real Kapadokya terrain, then run multi-agent polish on it").
 3. **Week 3**: Cross-polish — make the multi-agent coordinator aware of terrain scenes, add terrain-specific agents or passes if needed. Add caching, error handling, nice progress reporting via jobs.
 4. **Polish & Docs**: Real-world examples (Kapadokya, Galata + Bosphorus extension, Pamukkale, Tokyo crossing, Grand Canyon).
@@ -255,9 +256,10 @@ Because the two features are synergistic:
 2. Implement `geocode_location` + `fetch_elevation_for_bbox` first — can be tested completely outside Blender.
 3. Once basic terrain lands in Blender, immediately wire the first two multi-agent specialists against it.
 
-This pair of features turns Remirdy from "very good procedural helper" into "the AI that can literally build real places and then intelligently direct a team of specialist 3D artists inside Blender."
+Together, these features would make real-world terrain workflows and iterative
+scene-polish workflows easier to demonstrate and test.
 
-Ready to start with whichever half you want to de-risk first.
+Ready to start with whichever half should be de-risked first.
 
 ---
 

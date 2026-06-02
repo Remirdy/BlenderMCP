@@ -1,103 +1,100 @@
 # Remirdy Blender Studio MCP
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![CI](https://github.com/Remirdy/BlenderMCP/actions/workflows/ci.yml/badge.svg)](https://github.com/Remirdy/BlenderMCP/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![Blender](https://img.shields.io/badge/blender-3.6%2B-orange.svg)](https://www.blender.org/)
 [![Version](https://img.shields.io/badge/version-0.2.0-green.svg)](pyproject.toml)
 
-A local [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) bridge that lets any MCP-capable AI client control Blender directly — building 3D scenes, generating assets, importing AI-generated models, and rendering previews, all through natural-language prompts.
+Remirdy Blender Studio MCP is a local Model Context Protocol server for working
+with Blender from an MCP-capable client. It runs a small Python server on your
+machine, talks to a Blender add-on over a local TCP bridge, and exposes named
+tools for scene creation, rendering, import/export, materials, quality checks,
+and character workflows.
 
----
+The project is intentionally local-first. Blender operations run through a
+registered operation list; there is no generic "execute arbitrary Python" tool
+in the default bridge.
+
+![Remirdy Blender Studio MCP hero render](docs/assets/remirdy_mcp_readme_hero.png)
+
+The render above was generated in Blender from this repository:
+
+```bash
+/Applications/Blender.app/Contents/MacOS/Blender --background --python scripts/create_readme_hero_scene.py
+```
+
+## What It Does
+
+- Connects MCP clients to a running Blender session.
+- Builds scene blockouts from prompts using Blender-side operations.
+- Creates cameras, lighting, materials, props, interiors, architecture, and game-environment layouts.
+- Renders previews and final images.
+- Exports `.glb`, `.fbx`, `.obj`, and `.blend` files to a local workspace.
+- Supports optional image-to-3D and vision providers when you configure them.
+- Provides local/API-free fallbacks for several workflows.
+
+Some advanced features are still under active development. The docs try to call
+out where a workflow is production-ready, experimental, or provider-dependent.
 
 ## Architecture
 
 ```mermaid
 graph LR
-    Client["MCP Client\n(Claude Desktop / Cursor / etc.)"]
-    Server["MCP Server\n(remirdy-mcp)"]
-    Bridge["Blender Bridge\n(TCP 127.0.0.1:8765)"]
-    Blender["Blender\n(bpy ops)"]
-    Providers["Cloud Providers\n(Meshy / Tripo / Rodin / Hunyuan3D)"]
-    Vision["Gemini Vision\n(AI scene analysis)"]
+    Client["MCP client"]
+    Server["Python MCP server"]
+    Bridge["Blender add-on bridge\n127.0.0.1:8765"]
+    Blender["Blender operations\nregistered by name"]
+    Providers["Optional providers\nvision / image-to-3D / local models"]
 
-    Client -->|"MCP stdio"| Server
+    Client -->|"stdio or HTTP MCP"| Server
     Server -->|"JSON over TCP"| Bridge
     Bridge --> Blender
     Server --> Providers
-    Server --> Vision
 ```
 
-The MCP server never executes arbitrary Python in Blender. It only sends **named operation strings** that Blender dispatches through `blender_addon/blender_ops/registry.py` — keeping arbitrary code execution out of the default surface area.
+The operation registry lives in
+[`blender_addon/blender_ops/registry.py`](blender_addon/blender_ops/registry.py).
+That file is the source of truth for what the server is allowed to ask Blender
+to do.
 
----
+## Quick Start
 
-## Features
-
-### 🧠 AI Vision Scene Analysis (v0.2.0 — NEW)
-
-Point the system at a **PSD, PSB, PNG, or JPEG** concept art file and it will use **Google Gemini 2.5-flash** to:
-
-- Identify every object in the image with its type, position, material, and scale
-- Generate a structured 3D scene plan (lighting, camera angle, mood, colour palette)
-- Analyse individual PSD layers to determine what 3D role each should play
-- Fall back silently to colour-sampling analysis when no API key is set
-
-### 🎮 Scene Generation
-
-| Tool category | Count | Examples |
-|---|---|---|
-| Scene & Prompt | 8 | `create_scene_from_prompt`, `create_cinematic_scene` |
-| Game Environment | 14 | `create_game_environment`, `create_game_level_blockout` |
-| Interior Design | 7 | `create_interior_design_scene`, `add_furniture_set` |
-| Architecture | 4 | `create_architectural_exterior`, `create_facade` |
-| Modular / Kitbash | 11 | `create_modular_set`, `assemble_from_modules` |
-| Product Render | 7 | `create_product_render_scene`, `apply_product_material` |
-
-### 🖼️ Image → 3D Model
-
-| Provider | API Key | Speed | Notes |
-|---|---|---|---|
-| **Meshy** | `MESHY_API_KEY` | ~60 s | PBR textures, quad mesh |
-| **Tripo** | `TRIPO_API_KEY` | ~45 s | Excellent topology |
-| **Rodin** (Hyper3D) | `RODIN_API_KEY` | ~90 s | High detail |
-| **Hunyuan3D** (Tencent) | `HUNYUAN3D_API_KEY` | ~120 s | Open-weight cloud |
-| **Local** (TripoSR / custom) | `REMIRDY_LOCAL_IMAGE_TO_3D_COMMAND` | varies | Runs fully offline |
-| **Parallel** | — | fastest wins | Cloud + local race |
-
-### ✨ Assets, Materials & Quality
-
-Characters (11 tools) · Materials (11) · Assets (11) · Quality checks (17) · Rendering (12) · Export (8)
-
----
-
-## Quick start
-
-### 1 — Install the MCP server
+### 1. Install the MCP server
 
 ```bash
-git clone https://github.com/remirdy/remirdy-blender-studio-mcp.git
-cd remirdy-blender-studio-mcp
+git clone https://github.com/Remirdy/BlenderMCP.git
+cd BlenderMCP
 
-python3 -m venv .venv && source .venv/bin/activate
-pip install -e .
-
-# Optional: set your API keys
-cp .env.example .env && nano .env
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
 ```
 
-### 2 — Install the Blender add-on
+Optional provider settings live in `.env`:
+
+```bash
+cp .env.example .env
+```
+
+Only fill in the keys you actually use.
+
+### 2. Install the Blender add-on
 
 ```bash
 python scripts/package_addon.py
 ```
 
-In Blender: **Edit → Preferences → Add-ons → Install** → select `dist/remirdy_blender_studio.zip` → enable **Remirdy Blender Studio MCP** → press **N** in the 3D viewport → **Remirdy MCP** tab → **Start Bridge**.
+In Blender:
 
-### 3 — Connect your MCP client
+1. Open **Edit -> Preferences -> Add-ons -> Install**.
+2. Select `dist/remirdy_blender_studio.zip`.
+3. Enable **Remirdy Blender Studio MCP**.
+4. In the 3D viewport, press **N**, open the **Remirdy MCP** tab, and click **Start Bridge**.
 
-Default desktop MCP clients should use the stdio transport:
+### 3. Register the MCP server
 
-Add to your MCP client config (e.g. `claude_desktop_config.json`):
+Example MCP client config:
 
 ```json
 {
@@ -105,7 +102,7 @@ Add to your MCP client config (e.g. `claude_desktop_config.json`):
     "remirdy-blender": {
       "command": "python",
       "args": ["-m", "server.main"],
-      "cwd": "/absolute/path/to/remirdy-blender-studio-mcp",
+      "cwd": "/absolute/path/to/BlenderMCP",
       "env": {
         "REMIRDY_WORKSPACE": "/Users/you/RemirdyWorkspace"
       }
@@ -114,180 +111,114 @@ Add to your MCP client config (e.g. `claude_desktop_config.json`):
 }
 ```
 
+Restart your client, then run:
+
+```text
+connect_blender
+```
+
+Try a small scene:
+
+```text
+Create a Mediterranean terrace scene with warm evening light, terracotta tiles,
+potted plants, and a small wrought-iron table. Render a preview and export GLB.
+```
+
+## Transports
+
+Most desktop clients use stdio:
+
+```bash
+python -m server.main
+```
+
 For local HTTP testing:
 
 ```bash
 remirdy-mcp --transport http
 ```
 
-This starts the streamable HTTP endpoint at:
+This exposes:
 
-```
+```text
 http://127.0.0.1:8000/mcp
 ```
 
-For ChatGPT developer mode, expose the MCP endpoint through HTTPS:
+For HTTPS testing, the CLI can use `ngrok` or `cloudflared` when installed:
 
 ```bash
 remirdy-mcp --transport https
 ```
 
-The command auto-detects `ngrok` or `cloudflared`, starts a tunnel, and prints a
-ChatGPT-ready URL like:
+## Optional Providers
 
-```
-https://example.ngrok-free.app/mcp
-```
+The base bridge does not require cloud APIs. Provider-backed workflows are
+enabled only when configured.
 
-Paste that URL into **ChatGPT → Settings → Apps → Create app → MCP server
-endpoint**, then scan tools. If you already have your own HTTPS reverse proxy,
-skip tunnel startup:
-
-```bash
-remirdy-mcp --transport https --tunnel none --public-url https://your-domain.example
-```
-
-### 4 — Try a prompt
-
-```
-connect_blender
-```
-
-```
-Create a small Mediterranean terrace scene — warm golden-hour lighting,
-terracotta tiles, some potted plants, and a wrought-iron table. Export as GLB.
-```
-
----
-
-## AI Vision setup (optional but recommended)
-
-Get a free API key at [Google AI Studio](https://aistudio.google.com/) and add it to your `.env`:
-
-```
-GEMINI_API_KEY=your_key_here
-```
-
-Then try:
-
-```
-Build a 3D scene from ~/Desktop/concept_art.psd using AI vision analysis.
-Use the detected object positions and materials for accurate placement.
-```
-
-Without an API key the system falls back to colour-based analysis — it still works, just less accurately for complex scenes.
-
----
-
-## Supported formats
-
-| Input | Output |
+| Workflow | Configuration |
 |---|---|
-| PSD, PSB (Photoshop) | `.blend` |
-| PNG, JPEG, WEBP | `.glb` (glTF binary) |
-| GLB (import) | `.fbx` |
-| — | `.obj` |
+| Gemini image/PSD analysis | `GEMINI_API_KEY` |
+| Meshy image-to-3D | `MESHY_API_KEY` |
+| Tripo image-to-3D | `TRIPO_API_KEY` |
+| Rodin / Hyper3D image-to-3D | `RODIN_API_KEY` |
+| Hunyuan3D image-to-3D | `HUNYUAN3D_API_KEY` |
+| Local image-to-3D command | `REMIRDY_LOCAL_IMAGE_TO_3D_COMMAND` |
+| API-free human provider | local Blender add-on such as MPFB/MakeHuman, when installed |
 
----
+When no provider is configured, tools should either use a local fallback or
+return a clear `fallback_reason`.
 
-## Tool reference (all categories)
+## Common Tools
 
-| Category | Module | Tools |
-|---|---|---|
-| Connection | `connection_tools` | connect_blender, disconnect_blender, get_connection_status, ping_blender, … |
-| Scene | `scene_tools` | create_scene_from_prompt, get_scene_summary, setup_camera, clear_scene, … |
-| Rendering | `render_tools` | render_preview, apply_render_preset, setup_lighting, set_render_resolution, … |
-| Materials | `material_tools` | apply_material_preset, create_pbr_material, set_object_color, bulk_assign_material, … |
-| Characters | `character_tools` | create_rigged_character, add_animation_clip, set_character_pose, rig_character, … |
-| Assets | `asset_tools` | create_prop, duplicate_object, merge_objects, apply_transform, … |
-| Game | `game_tools` | create_game_environment, create_game_level_blockout, add_collision_mesh, … |
-| Interior | `interior_tools` | create_interior_design_scene, add_furniture_set, add_lighting_plan, … |
-| Architecture | `architecture_tools` | create_architectural_exterior, create_facade, add_windows, add_roof, … |
-| Modular | `modular_tools` | create_modular_set, assemble_from_modules, snap_to_grid, … |
-| Product | `product_tools` | create_product_render_scene, apply_product_material, add_product_lighting, … |
-| Image → 3D | `reference_asset_tools` | create_3d_asset_from_reference_image, build_layered_scene_from_image, … |
-| Asset Source | `asset_source_tools` | search_polyhaven, download_hdri, download_texture, list_asset_packs, … |
-| Import | `import_tools` | import_glb, import_fbx |
-| Export | `export_tools` | export_glb, export_fbx, export_obj, export_blend, … |
-| Quality | `quality_tools` | scene_quality_check, auto_fix_scene, check_mesh_errors, optimize_scene, … |
-| Understanding | `understanding_tools` | analyse_scene, describe_objects, get_material_report, … |
-| Marketplace | `marketplace_tools` | browse_marketplace, download_asset, install_asset, … |
-| Telemetry | `telemetry_tools` | get_telemetry, reset_telemetry, toggle_telemetry |
+| Category | Examples |
+|---|---|
+| Connection | `connect_blender`, `get_connection_status`, `ping_blender` |
+| Scene | `create_scene_from_prompt`, `clear_scene`, `get_scene_summary` |
+| Rendering | `render_preview`, `render_final`, `apply_render_preset` |
+| Materials | `create_material`, `apply_material`, `build_shader_node_graph` |
+| Characters | `create_rigged_character`, `create_api_free_runway_show`, `export_character_glb` |
+| Import/export | `import_glb`, `export_glb`, `export_fbx`, `export_blend` |
+| Quality | `scene_quality_check`, `auto_fix_scene`, `optimize_scene` |
 
-Full parameter docs: [`docs/tool_reference.md`](docs/tool_reference.md)
+Full tool notes are in [`docs/tool_reference.md`](docs/tool_reference.md).
 
----
+## Repository Layout
 
-## Repository layout
-
-```
-blender_addon/              Blender add-on (runs inside Blender)
-  blender_ops/              Operation handlers + registry
-  bridge_server.py          TCP bridge server
-server/                     MCP server (runs on the host)
-  tools/                    MCP tool definitions (one file per category)
-  providers/                Image-to-3D provider adapters
-  utils/                    Shared helpers: psd_utils, ai_vision, validation, …
-tests/                      Server-side pytest suite (no Blender needed)
-examples/prompts/           Copy-paste prompt examples
-docs/                       Extended documentation
-scripts/                    Packaging, TripoSR install helper
+```text
+blender_addon/              Blender add-on and operation handlers
+  blender_ops/              Blender-side named operations
+server/                     MCP server and tool definitions
+  tools/                    MCP tool modules
+  providers/                Optional provider adapters
+  utils/                    Shared server utilities
+tests/                      Server-side tests that do not require Blender
+examples/prompts/           Prompt examples
+docs/                       Installation, usage, safety, and roadmap notes
+scripts/                    Packaging and reproducible demo scripts
 ```
 
----
-
-## Running the tests
+## Tests
 
 ```bash
-pip install -e ".[dev]"
 python -m pytest tests/ -v
 ```
 
----
+Blender-side changes should also be smoke-tested by packaging the add-on,
+starting the bridge in Blender, and running `connect_blender`.
 
-## Environment variables
+## Safety
 
-See [`.env.example`](.env.example) for the full list with descriptions. Key variables:
+- The MCP server talks to Blender through named operations only.
+- The bridge is local by default.
+- Generated files are written under `REMIRDY_WORKSPACE`.
+- Secrets belong in `.env` or the MCP client environment, not in Git.
 
-| Variable | Default | Purpose |
-|---|---|---|
-| `REMIRDY_WORKSPACE` | `~/RemirdyWorkspace` | Output directory |
-| `REMIRDY_BRIDGE_TIMEOUT` | `3900` | Bridge socket timeout (seconds) |
-| `GEMINI_API_KEY` | — | Enables AI vision scene analysis |
-| `MESHY_API_KEY` | — | Meshy cloud image-to-3D |
-| `TRIPO_API_KEY` | — | Tripo cloud image-to-3D |
-| `RODIN_API_KEY` | — | Rodin (Hyper3D) cloud image-to-3D |
-| `HUNYUAN3D_API_KEY` | — | Hunyuan3D cloud image-to-3D |
-| `REMIRDY_LOCAL_IMAGE_TO_3D_COMMAND` | — | Local image-to-3D command template |
-| `REMIRDY_LOG_LEVEL` | `INFO` | Logging verbosity |
-
----
-
-## Troubleshooting
-
-| Symptom | Fix |
-|---|---|
-| `Could not reach the Blender bridge` | Blender open? Add-on enabled? **Start Bridge** clicked? |
-| Image-to-3D falls back to procedural | Check `fallback_reason` in response; verify API key or local command |
-| Gemini vision disabled | Set `GEMINI_API_KEY` in `.env`; run `pip install google-genai` |
-| TripoSR very slow | Likely on CPU — lower `TRIPOSR_MC_RESOLUTION` or use a GPU machine |
-| Render is empty | Run `setup_camera` or `auto_fix_scene` first |
-| PSD layers not extracted | Run `pip install psd-tools Pillow` |
-
----
-
-## Safety model
-
-The bridge only dispatches **named operations** registered in `registry.py`. No arbitrary Python execution. File output is kept under `REMIRDY_WORKSPACE`. See [`docs/safety.md`](docs/safety.md) for details.
-
----
+See [`docs/safety.md`](docs/safety.md) and [`SECURITY.md`](SECURITY.md).
 
 ## Contributing
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md) for dev setup, code structure, and how to add new tools or providers.
-
----
+See [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## License
 
-MIT — see [LICENSE](LICENSE). Check the licenses of any local image-to-3D model weights you install separately before using their output commercially.
+MIT. See [`LICENSE`](LICENSE).

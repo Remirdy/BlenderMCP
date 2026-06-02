@@ -3,11 +3,12 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import Context, FastMCP
 
 from ._common import call, log
 from ..utils.sprite_utils import slice_sprite_sheet
 from ..utils.psd_utils import parse_layered_image
+from ..utils.ai_vision import generate_scene_plan, generate_scene_plan_with_host_ai, is_available as gemini_available
 from ..providers.registry import generate_from_image, get_provider
 from ..providers.base import GenerationOptions
 
@@ -17,6 +18,48 @@ def _workspace_dir(sub: str) -> Path:
     path = Path(root) / "outputs" / sub
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+async def _enrich_scene_plan_with_selected_ai(
+    *,
+    ctx: Context,
+    parsed: dict,
+    image_path: str,
+    vision_provider: str,
+) -> dict:
+    provider = vision_provider.lower().strip()
+    if provider not in {"auto", "host", "gemini", "none"}:
+        parsed["ai_scene_plan_error"] = (
+            f"Unknown vision_provider '{vision_provider}'. "
+            "Choose auto, host, gemini, or none."
+        )
+        return parsed
+    if provider == "none" or parsed.get("ai_scene_plan"):
+        return parsed
+
+    analysis_image = parsed.get("analysis_image_path") or image_path
+    layers_meta = parsed.get("layers") or None
+
+    if provider in {"auto", "host"}:
+        try:
+            host_plan = await generate_scene_plan_with_host_ai(ctx, analysis_image, layers_meta)
+            if host_plan:
+                parsed["ai_scene_plan"] = host_plan
+                parsed["ai_scene_plan_provider"] = "host"
+                return parsed
+        except Exception as exc:
+            log.debug("Host AI scene planning failed: %s", exc)
+
+    if provider in {"auto", "gemini"} and gemini_available():
+        try:
+            gemini_plan = generate_scene_plan(analysis_image, layers_meta)
+            if gemini_plan:
+                parsed["ai_scene_plan"] = gemini_plan
+                parsed["ai_scene_plan_provider"] = "gemini"
+        except Exception as exc:
+            log.debug("Gemini scene planning failed: %s", exc)
+
+    return parsed
 
 
 def register(mcp: FastMCP) -> None:
@@ -75,6 +118,74 @@ def register(mcp: FastMCP) -> None:
                 "fallback_reason": fallback_reason,
                 "glb_path": glb_path if provider_result else "",
                 "auto_upright": auto_upright,
+                "target_height": target_height,
+            },
+        )
+
+    @mcp.tool()
+    def create_model_from_image(
+        reference_image: str,
+        name: str = "AI_Reconstructed_ImageModel",
+        mode: str = "model",
+        max_res: int = 220,
+        relief_depth: float = 0.18,
+        thickness: float = 0.12,
+        target_height: float = 2.4,
+        smooth: bool = True,
+    ) -> dict:
+        """Install-free, API-free image -> 3D, computed entirely inside Blender.
+
+        Produces a REAL textured, volumetric mesh (not a flat plane): it cuts the
+        subject's silhouette, displaces the front surface by per-pixel luminance
+        for bas-relief detail, solidifies for thickness, then bevels/subdivides
+        for clean edges. The source image is projected as the colour texture.
+
+        Requires no API key and no external model/install — only Blender's
+        bundled numpy. Best for props, logos, badges, sprites, character cut-outs
+        and any subject with a clear silhouette.
+
+        mode: 'model'  -> silhouette-cut volume (default)
+              'relief' -> full-frame bas-relief tile (no cut)
+        max_res: vertex-grid resolution cap (higher = more detail, slower).
+        """
+        image_path = str(Path(reference_image).expanduser().resolve())
+        return call(
+            "create_model_from_image",
+            {
+                "reference_image": image_path,
+                "name": name,
+                "mode": mode,
+                "max_res": max_res,
+                "relief_depth": relief_depth,
+                "thickness": thickness,
+                "target_height": target_height,
+                "smooth": smooth,
+            },
+        )
+
+    @mcp.tool()
+    def create_relief_from_image(
+        reference_image: str,
+        name: str = "AI_Reconstructed_Relief",
+        max_res: int = 256,
+        relief_depth: float = 0.22,
+        thickness: float = 0.08,
+        target_height: float = 2.4,
+    ) -> dict:
+        """Install-free bas-relief (raised carving) panel from any image.
+
+        A full-frame variant of create_model_from_image — keeps the whole picture
+        and raises it by luminance into a carved relief tile. No API/model needed.
+        """
+        image_path = str(Path(reference_image).expanduser().resolve())
+        return call(
+            "create_relief_from_image",
+            {
+                "reference_image": image_path,
+                "name": name,
+                "max_res": max_res,
+                "relief_depth": relief_depth,
+                "thickness": thickness,
                 "target_height": target_height,
             },
         )
@@ -150,12 +261,16 @@ def register(mcp: FastMCP) -> None:
         style: str = "stylized_hero",
         animation: str = "idle_wave",
         provider: str = "parallel",
+        realism: str = "auto",
     ) -> dict:
         """Create a textured 3D character directly from a natural-language text prompt.
 
-        Launches parallel text-to-3D cloud/local model pipelines to construct a fully
-        colored character mesh matching your description. If API keys are missing,
-        it automatically falls back to an aligned, fully rigged procedural character rig.
+        Builds a single seamless organic body mesh (not glued primitives) via the
+        in-Blender procedural engine — no API key required. Cloud text-to-3D is
+        used only if explicitly configured.
+
+        realism: 'auto' infers realistic vs stylized from the prompt; or force
+                 'realistic' / 'stylized'.
         """
         glb_path = str(_workspace_dir("exports") / f"{character_name}.glb")
         provider_result = None
@@ -177,12 +292,27 @@ def register(mcp: FastMCP) -> None:
         # Map semantic style prompts to procedural options
         procedural_style = "stylized_hero"
         prompt_lower = prompt.lower()
-        if "knight" in prompt_lower or "paladin" in prompt_lower or "fantasy" in prompt_lower:
+        fashion_words = (
+            "fashion", "runway", "catwalk", "couture", "model", "defile",
+            "defile", "kıyafet", "kiyafet", "moda", "podyum"
+        )
+        if any(w in prompt_lower for w in fashion_words):
+            procedural_style = "fashion_runway"
+        elif "human" in prompt_lower or "person" in prompt_lower or "insan" in prompt_lower:
+            procedural_style = "realistic_human"
+        elif "knight" in prompt_lower or "paladin" in prompt_lower or "fantasy" in prompt_lower:
             procedural_style = "fantasy_knight"
         elif "sci-fi" in prompt_lower or "space" in prompt_lower or "scout" in prompt_lower or "armor" in prompt_lower:
             procedural_style = "sci_fi_scout"
         elif "cyber" in prompt_lower or "ninja" in prompt_lower or "adventurer" in prompt_lower:
             procedural_style = "cyber_adventurer"
+
+        # Infer realism from the prompt unless the caller forced it.
+        resolved_realism = realism.lower().strip()
+        if resolved_realism == "auto":
+            realistic_words = ("realistic", "realism", "photoreal", "lifelike",
+                               "gerçekçi", "gerceklci", "gercekci", "insan", "human", "fashion", "runway", "defile")
+            resolved_realism = "realistic" if any(w in prompt_lower for w in realistic_words) else "stylized"
 
         # Dispatch rigging, layout, and rendering to Blender
         return call(
@@ -192,26 +322,43 @@ def register(mcp: FastMCP) -> None:
                 "style": procedural_style,
                 "animation": animation,
                 "clear_scene": True,
+                "realism": resolved_realism,
+                "unified": True,
             },
         )
 
     @mcp.tool()
-    def create_scene_from_layered_image(
+    async def create_scene_from_layered_image(
         image_path: str,
         theme: str = "auto",
         spacing: float = 3.0,
         spawn_3d_props: bool = True,
         use_ai_reconstruction: bool = True,
         clear_scene: bool = True,
+        vision_provider: str = "auto",
+        *,
+        ctx: Context,
     ) -> dict:
         """Create a stunning 3D parallax hybrid scene in Blender from a PSD, PNG, or JPEG file.
 
         Automatically slices layers, analyzes dominant color palettes, profiles visual zones
         to detect landmarks/terrain/water, and reconstructs a physical layered 3D scene with local AI.
+
+        vision_provider:
+            "auto"   -> use the MCP host AI first, then Gemini if configured, then colour fallback.
+            "host"   -> use the connected MCP client's AI via sampling, with no API key on this server.
+            "gemini" -> use Gemini API vision when GEMINI_API_KEY is configured.
+            "none"   -> skip AI vision and use deterministic colour/zone analysis only.
         """
         img_path = Path(image_path).expanduser().resolve()
         if not img_path.exists():
             return {"ok": False, "error": f"Image path does not exist: {image_path}"}
+        provider = vision_provider.lower().strip()
+        if provider not in {"auto", "host", "gemini", "none"}:
+            return {
+                "ok": False,
+                "error": "vision_provider must be one of: auto, host, gemini, none",
+            }
 
         # Setup slice output folder in the workspace
         slices_dir = _workspace_dir("layered_slices") / img_path.stem
@@ -219,7 +366,17 @@ def register(mcp: FastMCP) -> None:
 
         try:
             # Parse PSD/PNG/JPEG layers and aesthetic metadata
-            parsed = parse_layered_image(str(img_path), str(slices_dir))
+            parsed = parse_layered_image(
+                str(img_path),
+                str(slices_dir),
+                use_gemini_ai=(provider == "gemini"),
+            )
+            parsed = await _enrich_scene_plan_with_selected_ai(
+                ctx=ctx,
+                parsed=parsed,
+                image_path=str(img_path),
+                vision_provider=provider,
+            )
         except Exception as exc:
             log.error("Failed to parse layered image: %s", exc)
             return {"ok": False, "error": f"Failed to parse image: {exc}"}
@@ -248,6 +405,9 @@ def register(mcp: FastMCP) -> None:
             "clear_scene": clear_scene,
             "width": parsed.get("width", 1920),
             "height": parsed.get("height", 1080),
+            "ai_scene_plan": parsed.get("ai_scene_plan"),
+            "ai_scene_plan_provider": parsed.get("ai_scene_plan_provider"),
+            "vision_provider": provider,
         }
 
         log.info("Forwarding layered depth scene parameters to Blender...")

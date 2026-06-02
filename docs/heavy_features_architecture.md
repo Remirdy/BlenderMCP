@@ -95,4 +95,4 @@ This document defines the architectural approach for the most ambitious remainin
 
 ---
 
-**Status**: Architectural foundation. Actual deep implementation will happen after the current MVP professionalization pass.
+**Status**: Architectural foundation. Deeper implementation should happen after the current MVP readiness pass.

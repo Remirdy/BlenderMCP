@@ -31,3 +31,6 @@ coverage.xml
 
 # Scratch / temp work dirs
 scratch/
+
+# Generated README animation frames
+docs/assets/runway_frames/

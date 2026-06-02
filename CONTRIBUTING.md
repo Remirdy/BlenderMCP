@@ -113,6 +113,22 @@ async def my_new_tool(param_a: str, param_b: float = 1.0) -> str:
 4. Run `python -m py_compile` on any new Python files to catch syntax errors.
 5. Open a PR against `main` with a clear description of what changed and why.
 
+Use the pull request template and include any Blender-side smoke test notes when
+your change touches `blender_addon/`.
+
+---
+
+## Security-sensitive changes
+
+Before opening a PR, double-check that the change does not:
+
+- Send arbitrary Python source to Blender
+- Write generated files outside `REMIRDY_WORKSPACE`
+- Log or commit API keys
+- Add real network calls to tests
+
+See [`SECURITY.md`](SECURITY.md) for the project security model.
+
 ---
 
 ## Questions?

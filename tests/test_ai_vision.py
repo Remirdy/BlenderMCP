@@ -5,13 +5,16 @@ import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import anyio
 import pytest
 
 from server.utils.ai_vision import (
     _get_api_key,
     _parse_json_response,
     analyze_flat_image_with_ai,
+    analyze_image_with_host_ai,
     analyze_image_with_gemini,
+    generate_scene_plan_with_host_ai,
     analyze_psd_layer,
     extract_scene_objects,
     generate_scene_plan,
@@ -201,3 +204,44 @@ class TestGenerateScenePlan:
             result = analyze_flat_image_with_ai(str(png))
             mock_plan.assert_called_once_with(str(png), layers_meta=None)
             assert result == {"mocked": True}
+
+
+class TestHostAiVision:
+    def test_host_ai_returns_sampling_text(self, tmp_path):
+        png = tmp_path / "scene.png"
+        png.write_bytes(b"fake")
+
+        class FakeResult:
+            content = type("Content", (), {"type": "text", "text": '{"ok": true}'})()
+
+        class FakeSession:
+            async def create_message(self, **kwargs):
+                assert kwargs["messages"][0].content[0].type == "image"
+                assert kwargs["messages"][0].content[1].type == "text"
+                return FakeResult()
+
+        ctx = type("Ctx", (), {"session": FakeSession(), "request_id": "req-1"})()
+        raw = anyio.run(analyze_image_with_host_ai, ctx, str(png), "Return JSON")
+        assert raw == '{"ok": true}'
+
+    def test_host_scene_plan_parses_json(self, tmp_path):
+        png = tmp_path / "scene.png"
+        png.write_bytes(b"fake")
+
+        class FakeResult:
+            content = type(
+                "Content",
+                (),
+                {
+                    "type": "text",
+                    "text": json.dumps({"scene_mood": "studio", "objects": []}),
+                },
+            )()
+
+        class FakeSession:
+            async def create_message(self, **kwargs):
+                return FakeResult()
+
+        ctx = type("Ctx", (), {"session": FakeSession(), "request_id": "req-1"})()
+        plan = anyio.run(generate_scene_plan_with_host_ai, ctx, str(png))
+        assert plan == {"scene_mood": "studio", "objects": []}

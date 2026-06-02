@@ -1,104 +1,61 @@
-# Professional Crazy Features — Next Level for Remirdy
+# Advanced Feature Roadmap
 
-This document defines ambitious ("çılgın") features that are designed from day one to be usable in real professional 3D production environments (not toys).
+This note tracks larger ideas that are not part of the core install path yet.
+The goal is to keep future work realistic: each item should have a clear user
+workflow, a testable output, and a fallback when external services are not
+configured.
 
-## Guiding Principles for New Features
+## Principles
 
-- Must integrate with existing Multi-Agent + Vision + Terrain systems.
-- Must use the job system for anything long-running.
-- Must have excellent error handling, progress reporting, and graceful degradation.
-- Must produce professional outputs (proper attribution, metadata, engine-ready results).
-- Must be controllable at both high level (one-button) and low level (power users).
+- Prefer local Blender operations where possible.
+- Use the job system for long-running work.
+- Report progress and failure reasons clearly.
+- Keep licensing and attribution visible for imported assets.
+- Support both high-level workflows and lower-level tool control.
 
----
+## Candidate Features
 
-## Proposed Features (Prioritized)
+### Video-to-3D Reconstruction
 
-### 1. Professional Video-to-3D Reconstruction Pipeline (High Priority)
+Input: a video clip or image sequence.
 
-**Vision**: Upload a video clip or image sequence → system extracts keyframes, understands the scene using vision, runs multi-agent reconstruction, and outputs a production-usable 3D blockout with cameras matching the original footage.
+Expected output: a Blender scene with approximate camera placement, blockout
+geometry, materials, lighting notes, and a reconstruction report.
 
-**Professional Requirements**:
-- Support for video files + image sequences
-- Automatic keyframe extraction (or user-defined)
-- Vision-based scene understanding (style, lighting mood, main subjects)
-- Multi-agent reconstruction loop (geometry → materials → lighting → composition → critique)
-- Camera animation extraction / approximation from video motion
-- Output: Clean collections, proper naming, renderable cameras, basic materials
-- Detailed reconstruction report (what was inferred, confidence, manual work needed)
+This builds on `create_scene_from_video_reference`, visual analysis tools, and
+the existing scene quality checks.
 
-**Integration**: Builds directly on existing `create_scene_from_video_reference` + `orchestrate_scene_with_agents` + vision tools.
+### Asset Curation and Placement
 
----
+Input: a request such as "find rocks that match this terrain scene".
 
-### 2. Advanced Professional Asset Curation & Placement System
+Expected output: imported assets with scale checks, attribution metadata,
+reasonable placement, and a short import report.
 
-**Vision**: "Find me 5 high-quality rocks for this terrain scene that match the current lighting and scale."
+### Scene Optimization and Delivery
 
-**Professional Requirements**:
-- Search across multiple providers (Poly Haven + Sketchfab + future)
-- Automatic licensing + attribution tracking (mandatory for professional use)
-- Smart import + placement based on current scene analysis (scale, materials, lighting)
-- Quality scoring before import (polygon count, topology, UVs)
-- Automatic variation generation (different rotations, scales, slight material tweaks)
-- Batch operations with progress
+Input: an existing Blender scene.
 
----
+Expected output: engine-focused cleanup for Unity, Unreal, or web delivery:
+material consolidation, collision proxies, export settings, and a readiness
+report.
 
-### 3. Full Scene Optimization & Delivery Agent
+### Time, Weather, and Lighting Studies
 
-**Vision**: After creating a complex scene (terrain + city + characters), one command runs a professional optimization pass and prepares it for delivery to Unity/Unreal/Web.
+Input: a scene and a time/weather brief.
 
-**Professional Requirements**:
-- Automatic LOD generation
-- UV packing / lightmap UVs
-- Material consolidation and optimization
-- Texture baking where useful
-- Collision proxy generation
-- Detailed engine-readiness report (Unity / Unreal / Web)
-- One-click "Prepare for Unity" / "Prepare for Unreal" with proper package structure
+Expected output: lighting variants or animation data that can be reviewed for
+architectural visualization, previz, or environment design.
 
----
+### Batch Project Mode
 
-### 4. Time + Weather + Lighting Simulation System (Advanced)
+Input: a JSON/YAML project definition.
 
-**Vision**: Take a real-world location (via terrain) and simulate it across different times of day and real weather conditions with high fidelity.
+Expected output: queued renders/exports with a combined report, useful for
+product variations, campaign renders, or repeated environment studies.
 
-**Professional Requirements**:
-- Support for multi-hour or multi-day animation of sun + sky
-- Integration with real historical or forecast weather data
-- Volumetric effects, god rays, precipitation particles based on weather
-- Automatic HDRI + procedural sky blending
-- Exportable lighting animation data
-- Used for cinematic previs or architectural visualization studies
+## Current Status
 
----
-
-### 5. Batch Project / Campaign Mode (Very Professional)
-
-**Vision**: "Create 8 variations of this product in different real-world environments with matching weather and lighting, then generate turntable renders and optimized exports."
-
-This turns Remirdy from a single-scene tool into a production pipeline tool.
-
-**Professional Requirements**:
-- Project definition file (JSON/YAML)
-- Job queue with dependencies
-- Parallel execution where safe
-- Consolidated reporting + delivery package
-- Cost/latency tracking (important when using paid APIs)
-
----
-
-## Implementation Strategy
-
-We will implement these features incrementally, always keeping them at "professional usable" quality rather than half-finished toys.
-
-Priority order for next phase:
-1. Professional Video-to-3D Reconstruction (biggest "wow" + builds on current strengths)
-2. Scene Optimization & Delivery Agent (extremely useful for real work)
-3. Robust job + caching + progress system (foundation for everything else)
-4. Advanced Asset Curation
-
----
-
-**Status**: Living document. Will be updated as features are designed and implemented.
+These are roadmap items. They should be implemented incrementally and kept out
+of the default happy path until they have tests, examples, and clear failure
+handling.

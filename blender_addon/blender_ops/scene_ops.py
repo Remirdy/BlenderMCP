@@ -86,6 +86,36 @@ def op_create_collection(params):
     return {"collection": coll.name}
 
 
+def op_create_primitive(params):
+    """Add a basic primitive mesh — handy as a scatter surface or test object.
+
+    params: kind (plane|cube|sphere|cylinder|cone), name?, location?,
+            size? (plane/cube), radius? (sphere/cylinder/cone), depth?.
+    """
+    kind = (params.get("kind") or "cube").lower()
+    name = params.get("name") or kind.capitalize()
+    loc = tuple(params.get("location", (0, 0, 0)))
+    if kind == "plane":
+        size = params.get("size", 10.0)
+        obj = H.add_plane(name, size=size if isinstance(size, (list, tuple)) else (size, size),
+                          location=loc)
+    elif kind == "cube":
+        s = params.get("size", 2.0)
+        obj = H.add_box(name, size=s if isinstance(s, (list, tuple)) else (s, s, s), location=loc)
+    elif kind == "sphere":
+        obj = H.add_sphere(name, radius=params.get("radius", 1.0), location=loc)
+    elif kind == "cylinder":
+        obj = H.add_cylinder(name, radius=params.get("radius", 1.0),
+                             depth=params.get("depth", 2.0), location=loc)
+    elif kind == "cone":
+        obj = H.add_cone(name, radius=params.get("radius", 1.0),
+                         depth=params.get("depth", 2.0), location=loc)
+    else:
+        return {"ok": False, "error": f"unknown primitive '{kind}'",
+                "available": ["plane", "cube", "sphere", "cylinder", "cone"]}
+    return {"ok": True, "object": obj.name, "kind": kind}
+
+
 def op_create_product_render_scene(params):
     from . import material_ops as M
     from . import render_ops as R

@@ -19,6 +19,7 @@ from .mcp_server import build_server
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8000
 DEFAULT_MCP_PATH = "/mcp"
+DEFAULT_SSE_PATH = "/sse"
 
 
 @dataclass(frozen=True)
@@ -47,6 +48,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--mcp-path",
         default=DEFAULT_MCP_PATH,
         help="Streamable HTTP MCP path. ChatGPT should receive this path.",
+    )
+    parser.add_argument(
+        "--http-protocol",
+        choices=("streamable-http", "sse"),
+        default="streamable-http",
+        help="Remote MCP HTTP protocol. ChatGPT supports both; SSE is useful for compatibility.",
     )
     parser.add_argument(
         "--tunnel",
@@ -218,7 +225,7 @@ def run(argv: Sequence[str] | None = None) -> None:
         build_server().run("stdio")
         return
 
-    mcp_path = _normalize_path(args.mcp_path)
+    mcp_path = _normalize_path(DEFAULT_SSE_PATH if args.http_protocol == "sse" else args.mcp_path)
     local_url = local_mcp_url(args.host, args.port, mcp_path)
     chatgpt_url = None
 
@@ -231,7 +238,11 @@ def run(argv: Sequence[str] | None = None) -> None:
         chatgpt_url = chatgpt_mcp_url(endpoint.url, mcp_path)
 
     _print_http_banner(local_url=local_url, chatgpt_url=chatgpt_url)
-    build_server(host=args.host, port=args.port, mcp_path=mcp_path).run("streamable-http")
+    server = build_server(host=args.host, port=args.port, mcp_path=mcp_path)
+    if args.http_protocol == "sse":
+        server.run("sse", mount_path=mcp_path)
+    else:
+        server.run("streamable-http")
 
 
 if __name__ == "__main__":

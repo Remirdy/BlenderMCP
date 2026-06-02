@@ -16,7 +16,7 @@ Workflow
 """
 from __future__ import annotations
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import Context, FastMCP
 
 from ..utils.browser_automation import (
     PLATFORM_LOGIN_URLS,
@@ -79,12 +79,15 @@ def register(mcp: FastMCP) -> None:
     # ── Image generation → Blender ────────────────────────────────────────────
 
     @mcp.tool()
-    def generate_image_and_build_scene(
+    async def generate_image_and_build_scene(
         prompt: str,
         platform: str = "chatgpt",
         build_scene: bool = True,
         channel_url: str = "",
         wait_seconds: int = 120,
+        vision_provider: str = "auto",
+        *,
+        ctx: Context,
     ) -> dict:
         """
         Generate an image on a web AI platform (no API key) and optionally build
@@ -92,7 +95,7 @@ def register(mcp: FastMCP) -> None:
 
         Steps:
           1. Generate image via the chosen platform.
-          2. Run Gemini AI vision analysis on the result.
+          2. Analyse the image using host AI, Gemini, or fallback colour analysis.
           3. Call build_layered_scene_from_image in Blender.
 
         Args:
@@ -101,17 +104,18 @@ def register(mcp: FastMCP) -> None:
             build_scene  : If True, automatically build a Blender scene from the image.
             channel_url  : Required for Midjourney — paste your Discord channel URL here.
             wait_seconds : Seconds to wait for image generation (Midjourney needs ~300).
+            vision_provider: auto | host | gemini | none.
 
         Returns dict with image_path, scene_built, layers_detected, ai_scene_plan.
         """
-        return run_async(
-            generate_and_build_scene(
-                prompt=prompt,
-                platform=platform,
-                build_scene=build_scene,
-                channel_url=channel_url or None,
-                wait_seconds=wait_seconds,
-            )
+        return await generate_and_build_scene(
+            prompt=prompt,
+            platform=platform,
+            build_scene=build_scene,
+            channel_url=channel_url or None,
+            wait_seconds=wait_seconds,
+            vision_provider=vision_provider,
+            ctx=ctx,
         )
 
     @mcp.tool()

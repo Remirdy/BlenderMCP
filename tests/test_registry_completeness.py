@@ -10,6 +10,7 @@ import pytest
 
 SERVER_TOOL_PACKAGES = [
     "server.tools.agent_tools",
+    "server.tools.animation_tools",
     "server.tools.architecture_tools",
     "server.tools.asset_tools",
     "server.tools.asset_source_tools",
@@ -25,6 +26,9 @@ SERVER_TOOL_PACKAGES = [
     "server.tools.modular_tools",
     "server.tools.multi_llm_tools",
     "server.tools.nerf_tools",
+    "server.tools.node_design_tools",
+    "server.tools.particle_tools",
+    "server.tools.uv_tools",
     "server.tools.product_tools",
     "server.tools.quality_tools",
     "server.tools.reference_asset_tools",
@@ -133,9 +137,11 @@ def test_ai_vision_module_exposes_public_api():
     for fn_name in [
         "is_available",
         "analyze_image_with_gemini",
+        "analyze_image_with_host_ai",
         "extract_scene_objects",
         "analyze_psd_layer",
         "generate_scene_plan",
+        "generate_scene_plan_with_host_ai",
         "analyze_flat_image_with_ai",
     ]:
         assert callable(getattr(ai_vision, fn_name, None)), (

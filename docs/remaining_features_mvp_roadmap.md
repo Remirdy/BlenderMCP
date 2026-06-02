@@ -1,8 +1,9 @@
 # Remirdy — Remaining Features MVP Roadmap (2026)
 
-This document tracks everything from the original "Çılgın Fikirler" list that has not yet reached professional MVP quality.
+This document tracks larger roadmap items that have not yet reached MVP quality.
 
-Goal: Bring the entire Remirdy project to a **coherent, demonstrable MVP** where many ambitious ideas are usable at production-adjacent quality, with clear extension points for the rest.
+Goal: keep the project focused on a coherent, demonstrable MVP with clear
+extension points for experimental work.
 
 ---
 
@@ -14,7 +15,7 @@ Goal: Bring the entire Remirdy project to a **coherent, demonstrable MVP** where
 - Real-time Weather Lighting
 - Asset auto-import & placement pipeline
 
-**Scaffold / Partial (needs professionalization):**
+**Scaffold / Partial (needs more implementation):**
 - Video Reference → 3D
 - Physics from Prompt
 - 3D Printing Preparation
@@ -137,7 +138,7 @@ Items in this category:
 
 ---
 
-## Professionalization Requirements (Applies to Everything)
+## Quality Requirements (Applies to Everything)
 
 Before declaring MVP:
 - Consistent error handling + helpful messages across all new tools
@@ -145,7 +146,8 @@ Before declaring MVP:
 - Telemetry coverage
 - Example prompts + expected outputs in `examples/`
 - Updated `professional_mvp_plan.md`
-- One "killer demo" workflow that combines 4+ ambitious features (e.g. real terrain + weather + multi-agent polish + 3D print export)
+- One integrated demo workflow that combines several mature features, such as
+  real terrain, weather, scene polish, and export.
 
 ---
 
@@ -157,11 +159,11 @@ Before declaring MVP:
 4. Unity/Unreal export enhancement
 5. Procedural City Blockout
 6. Heavy item architectural scaffolds
-7. Full professionalization + docs pass
+7. Documentation and usability pass
 8. Comprehensive testing + demo workflows
 
 ---
 
 **Status**: Living document. Will be updated as work progresses.
 
-Last updated: During the "complete all remaining items + professionalize for MVP" phase.
+Last updated: During the MVP readiness review.

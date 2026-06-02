@@ -7,9 +7,11 @@ directly. Each tool maps to a structured bridge operation.
 from __future__ import annotations
 
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 
 from .tools import (
     agent_tools,
+    animation_tools,    # Keyframes, drivers, timeline, undo/redo
     architecture_tools,
     asset_tools,
     asset_source_tools,
@@ -27,6 +29,9 @@ from .tools import (
     modular_tools,
     multi_llm_tools,     # Parallel Claude + ChatGPT + Gemini orchestration
     nerf_tools,          # NeRF / Gaussian Splatting → Blender
+    node_design_tools,   # Node-based design: Geometry Nodes + Shader Nodes
+    particle_tools,      # Game-ready scatter / vegetation / hair
+    uv_tools,            # UV unwrapping
     product_tools,
     reference_asset_tools,
     quality_tools,
@@ -81,6 +86,7 @@ def build_server(
         host=host,
         port=port,
         streamable_http_path=mcp_path,
+        transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
     )
     for module in (
         connection_tools,
@@ -90,6 +96,10 @@ def build_server(
         interior_tools,
         render_tools,
         material_tools,
+        node_design_tools, # Node-based design (Geometry + Shader nodes)
+        animation_tools,   # Animation, drivers, timeline, history
+        particle_tools,    # Game-ready scatter / vegetation / hair
+        uv_tools,          # UV unwrapping
         quality_tools,
         export_tools,
         asset_tools,

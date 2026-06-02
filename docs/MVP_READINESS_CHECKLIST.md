@@ -1,6 +1,6 @@
 # Remirdy Blender Studio MCP — MVP Readiness Checklist
 
-This checklist defines what "professional MVP" means for the project after completing the ambitious feature work.
+This checklist defines what "MVP-ready" means for the project.
 
 ## Core Stability & Architecture
 
@@ -10,7 +10,7 @@ This checklist defines what "professional MVP" means for the project after compl
 - [x] Graceful degradation when Blender bridge is not connected
 - [x] No breaking changes to existing tools
 
-## Ambitious Features (Çılgın Fikirler) Status
+## Larger Feature Status
 
 | Feature                              | Status          | MVP Quality? | Notes |
 |--------------------------------------|-----------------|--------------|-------|
@@ -29,7 +29,7 @@ This checklist defines what "professional MVP" means for the project after compl
 - [ ] Consistent, helpful error messages across all new tools
 - [ ] Updated tool_reference.md with all new capabilities
 - [ ] Example workflows in `examples/prompts/`
-- [ ] One "Killer Demo" workflow that combines 4+ ambitious features
+- [ ] One integrated demo workflow that combines several mature features
 - [ ] Remaining Features MVP Roadmap document exists
 - [ ] Heavy Features Architecture document exists
 - [ ] No obvious security / stability regressions
@@ -39,17 +39,17 @@ This checklist defines what "professional MVP" means for the project after compl
 - [x] `remaining_features_mvp_roadmap.md`
 - [x] `heavy_features_architecture.md`
 - [x] `MVP_READINESS_CHECKLIST.md` (this file)
-- [ ] Killer demo prompt collection (next step)
+- [ ] Integrated demo prompt collection (next step)
 
 ## Testing & Validation
 
 - [ ] Syntax clean across the codebase
 - [ ] Manual testing of key flows (Terrain + Weather + Multi-Agent)
 - [ ] Manual testing of 3D Print + Video Reference flows
-- [ ] End-to-end "one prompt does many ambitious things" test
+- [ ] End-to-end integrated workflow test
 
 ---
 
 **Current Overall MVP Readiness**: ~75%
 
-Target before declaring "MVP complete": 90%+ with at least one spectacular integrated demo.
+Target before declaring "MVP complete": 90%+ with one reliable integrated demo.

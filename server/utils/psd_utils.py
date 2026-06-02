@@ -1,7 +1,7 @@
 """PSD and multi-layer image parsing utilities with visual layout inspection.
 
-When a Gemini API key is present the module will use AI vision analysis to
-produce richer layer and scene metadata.  When no key is set it falls back to
+When AI vision is enabled the module can use Gemini analysis to produce richer
+layer and scene metadata. When no vision provider is available it falls back to
 the original colour-sampling approach transparently.
 """
 from __future__ import annotations
@@ -132,7 +132,12 @@ def detect_visual_objects(img) -> list[dict[str, Any]]:
         return []
 
 
-def parse_layered_image(file_path: str, output_dir: str) -> dict[str, Any]:
+def parse_layered_image(
+    file_path: str,
+    output_dir: str,
+    *,
+    use_gemini_ai: bool = True,
+) -> dict[str, Any]:
     """Parse a layered PSD file (or flat PNG/JPEG) and extract layers/visual parameters.
 
     Returns a structured dictionary:
@@ -218,7 +223,7 @@ def parse_layered_image(file_path: str, output_dir: str) -> dict[str, Any]:
 
                     # Optional: enrich with Gemini AI layer analysis
                     ai_analysis: dict[str, Any] | None = None
-                    if _ai_available():
+                    if use_gemini_ai and _ai_available():
                         try:
                             ai_analysis = _ai_analyze_layer(str(layer_file), layer.name)
                             if ai_analysis:
@@ -246,12 +251,17 @@ def parse_layered_image(file_path: str, output_dir: str) -> dict[str, Any]:
             if layers_meta:
                 # Optional: full scene plan from AI
                 ai_scene = None
-                if _ai_available():
+                composite_path = None
+                if main_img:
                     try:
                         composite_path = str(out_path / "00_composite.png")
-                        if main_img:
-                            main_img.save(composite_path)
-                            ai_scene = _ai_scene_plan(composite_path, layers_meta)
+                        main_img.save(composite_path)
+                    except Exception as save_exc:
+                        log.debug("Could not save composite analysis image: %s", save_exc)
+
+                if use_gemini_ai and _ai_available() and composite_path:
+                    try:
+                        ai_scene = _ai_scene_plan(composite_path, layers_meta)
                     except Exception as ai_exc:
                         log.debug("AI scene plan failed: %s", ai_exc)
 
@@ -266,6 +276,7 @@ def parse_layered_image(file_path: str, output_dir: str) -> dict[str, Any]:
                     "has_sky": has_sky,
                     "has_water": has_water,
                     "ai_scene_plan": ai_scene,
+                    "analysis_image_path": composite_path or str(path),
                 }
         except Exception as exc:
             log.error("Failed to parse PSD/PSB layers: %s. Falling back to flat extraction.", exc)
@@ -325,7 +336,7 @@ def parse_layered_image(file_path: str, output_dir: str) -> dict[str, Any]:
 
     # Optional: AI scene plan for flat images
     ai_scene = None
-    if _ai_available():
+    if use_gemini_ai and _ai_available():
         try:
             ai_scene = _ai_analyze_flat(file_path)
         except Exception as ai_exc:
@@ -340,4 +351,5 @@ def parse_layered_image(file_path: str, output_dir: str) -> dict[str, Any]:
         "sky_color": sky_color,
         "ground_color": ground_color,
         "ai_scene_plan": ai_scene,
+        "analysis_image_path": str(bg_file),
     }

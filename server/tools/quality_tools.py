@@ -13,6 +13,27 @@ def register(mcp: FastMCP) -> None:
         return call("create_collection", {"name": name})
 
     @mcp.tool()
+    def create_primitive(
+        kind: str = "cube",
+        name: str | None = None,
+        location: list[float] | None = None,
+        size: float | None = None,
+        radius: float | None = None,
+        depth: float | None = None,
+    ) -> dict:
+        """Add a basic primitive mesh (plane | cube | sphere | cylinder | cone).
+
+        Useful as a scatter surface, a test object, or a building block.
+        size applies to plane/cube; radius/depth to sphere/cylinder/cone.
+        """
+        params: dict = {"kind": kind}
+        for k, v in (("name", name), ("location", location), ("size", size),
+                     ("radius", radius), ("depth", depth)):
+            if v is not None:
+                params[k] = v
+        return call("create_primitive", params)
+
+    @mcp.tool()
     def organize_scene() -> dict:
         """Sort objects into logical collections (Architecture, Furniture, Props, Lights, Cameras, etc.)."""
         return call("organize_scene")
