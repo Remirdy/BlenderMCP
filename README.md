@@ -1,7 +1,6 @@
 # Remirdy Blender Studio MCP
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![CI](https://github.com/Remirdy/BlenderMCP/actions/workflows/ci.yml/badge.svg)](https://github.com/Remirdy/BlenderMCP/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![Blender](https://img.shields.io/badge/blender-3.6%2B-orange.svg)](https://www.blender.org/)
 [![Version](https://img.shields.io/badge/version-0.2.0-green.svg)](pyproject.toml)
@@ -22,6 +21,14 @@ The render above was generated in Blender from this repository:
 
 ```bash
 /Applications/Blender.app/Contents/MacOS/Blender --background --python scripts/create_readme_hero_scene.py
+```
+
+Example local character workflow using the API-free MPFB provider:
+
+![API-free MPFB runway animation](docs/assets/mpfb_runway_defile.gif)
+
+```bash
+/Applications/Blender.app/Contents/MacOS/Blender --background --python scripts/create_mpfb_runway_animation.py
 ```
 
 ## What It Does
