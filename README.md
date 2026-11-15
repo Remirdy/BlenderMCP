@@ -15,21 +15,19 @@ The project is intentionally local-first. Blender operations run through a
 registered operation list; there is no generic "execute arbitrary Python" tool
 in the default bridge.
 
-![Remirdy Blender Studio MCP hero render](docs/assets/remirdy_mcp_readme_hero.png)
+## Remirdy couture runway
 
-The render above was generated in Blender from this repository:
+[![Remirdy couture runway animation](docs/assets/remirdy_couture_runway.gif)](docs/assets/remirdy_couture_runway.mp4)
 
-```bash
-/Applications/Blender.app/Contents/MacOS/Blender --background --python scripts/create_readme_hero_scene.py
-```
+Six runway looks with fitted garments, rigged characters, simulated silk, goldwork and pearl details, a seated audience, and animated lighting. Rendered in Blender from the included scene scripts. The complete choreography plays at 3× speed.
 
-Example local character workflow using the API-free MPFB provider:
+[Watch the 20-second runway film](docs/assets/remirdy_couture_runway.mp4) · [Rebuild the scene](docs/couture_showcase.md)
 
-![API-free MPFB runway animation](docs/assets/mpfb_runway_defile.gif)
+| Runway lighting | Silk, goldwork, and pearls |
+| --- | --- |
+| ![Remirdy runway with three walking models and a seated audience](docs/assets/remirdy_couture_hero.png) | ![Close-up of the fitted corset, embroidery, pearls, and woven silk](docs/assets/remirdy_couture_detail.png) |
 
-```bash
-/Applications/Blender.app/Contents/MacOS/Blender --background --python scripts/create_mpfb_runway_animation.py
-```
+The garments are separate meshes: fitted bodices follow the rig, while the skirts use baked Blender Cloth with body collision and self collision. The scene uses local MPFB characters and CC0 MakeHuman source assets; no cloud API key is required. Setup and render commands are in the [showcase guide](docs/couture_showcase.md).
 
 ## What It Does
 
@@ -75,10 +73,10 @@ cd BlenderMCP
 
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -e ".[dev]"
+pip install -e ".[dev]" "mcp<2"
 ```
 
-Optional provider settings live in `.env`:
+The server uses the MCP 1.x SDK. Optional provider settings live in `.env`:
 
 ```bash
 cp .env.example .env
